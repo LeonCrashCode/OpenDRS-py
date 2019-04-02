@@ -206,8 +206,9 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
                     xavier_uniform_(p)
 
         if hasattr(model.encoder, 'embeddings'):
-            model.encoder.embeddings.load_pretrained_vectors(
-                model_opt.pre_word_vecs_enc)
+            for i in range(model_opt.encoder_num):
+                model.encoder[i].embeddings.load_pretrained_vectors(
+                    model_opt.pre_word_vecs_enc[i])
         if hasattr(model.decoder, 'embeddings'):
             model.decoder.embeddings.load_pretrained_vectors(
                 model_opt.pre_word_vecs_dec)
