@@ -159,7 +159,7 @@ class Trainer(object):
               save_checkpoint_steps=5000,
               valid_iter=None,
               valid_steps=10000,
-              encoder_id):
+              encoder_id=0):
         """
         The main training loop by iterating over `train_iter` and possibly
         running validation on `valid_iter`.

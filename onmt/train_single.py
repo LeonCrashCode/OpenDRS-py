@@ -95,11 +95,11 @@ def main(opt, device_id):
     model_saver = build_model_saver(model_opt, opt, model, fields, optim)
 
     trainer = build_trainer(
-        opt, device_id, model, fields, optim, model_saver=model_saver)
+        opt, device_id, model, fields[opt.encoder_id], optim, model_saver=model_saver)
 
-    train_iter = build_dataset_iter("train", fields, opt)
+    train_iter = build_dataset_iter("train", fields[opt.encoder_id], opt)
     valid_iter = build_dataset_iter(
-        "valid", fields, opt, is_train=False)
+        "valid", fields[opt.encoder_id], opt, is_train=False)
 
     if len(opt.gpu_ranks):
         logger.info('Starting training on GPU: %s' % opt.gpu_ranks)
