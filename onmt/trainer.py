@@ -156,6 +156,7 @@ class Trainer(object):
     def train(self,
               train_iter,
               train_steps,
+              train_interval_steps, # if you want to train one encoder, train_interval_steps should be the same to train_steps
               save_checkpoint_steps=5000,
               valid_iter=None,
               valid_steps=10000,
@@ -238,7 +239,7 @@ class Trainer(object):
                      and step % save_checkpoint_steps == 0)):
                 self.model_saver.save(step, moving_average=self.moving_average)
 
-            if train_steps > 0 and step >= train_steps:
+            if train_steps > 0 and (step >= train_steps or step % train_interval_steps == 0):
                 break
 
         if self.model_saver is not None:

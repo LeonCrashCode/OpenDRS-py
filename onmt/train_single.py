@@ -112,6 +112,7 @@ def main(opt, device_id):
     trainer.train(
         train_iter,
         train_steps,
+        train_interval_steps=opt.train_interval_steps
         save_checkpoint_steps=opt.save_checkpoint_steps,
         valid_iter=valid_iter,
         valid_steps=opt.valid_steps,
