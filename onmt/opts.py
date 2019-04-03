@@ -403,7 +403,7 @@ def train_opts(parser):
                    "uses more memory. Set to 0 to disable.")
     group.add('--train_steps', '-train_steps', type=int, default=100000,
               help='Number of training steps')
-    group.add('--train_interval_steps', '-train_steps', type=int, default=100000,
+    group.add('--train_interval_steps', '-train_interval_steps', type=int, default=100000,
               help='Number of training steps to force step training')
     group.add('--single_pass', '-single_pass', action='store_true',
               help="Make a single pass over the training dataset.")
