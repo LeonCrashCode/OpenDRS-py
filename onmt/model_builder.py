@@ -88,10 +88,11 @@ def load_test_model(opt, model_path=None):
     ArgumentParser.update_model_opts(model_opt)
     ArgumentParser.validate_model_opts(model_opt)
     vocab = checkpoint['vocab']
-    if inputters.old_style_vocab(vocab):
-        fields = inputters.load_old_vocab(
-            vocab, opt.data_type, dynamic_dict=model_opt.copy_attn
-        )
+    if inputters.old_style_vocab(vocab[0]):
+        fields = [inputters.load_old_vocab(vocab[i], opt.data_type, dynamic_dict=opt.copy_attn) for i in range(int(opt.encoder_num))]
+        #fields = inputters.load_old_vocab(
+        #    vocab, opt.data_type, dynamic_dict=model_opt.copy_attn
+        #)
     else:
         fields = vocab
 

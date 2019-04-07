@@ -115,7 +115,7 @@ class Translator(object):
             seed=-1):
         self.model = model
         self.fields = fields
-        tgt_field = dict(self.fields)["tgt"].base_field
+        tgt_field = dict(self.fields[0])["tgt"].base_field
         self._tgt_vocab = tgt_field.vocab
         self._tgt_eos_idx = self._tgt_vocab.stoi[tgt_field.eos_token]
         self._tgt_pad_idx = self._tgt_vocab.stoi[tgt_field.pad_token]
@@ -264,7 +264,8 @@ class Translator(object):
             tgt=None,
             src_dir=None,
             batch_size=None,
-            attn_debug=False):
+            attn_debug=False,
+	    encoder_id=0):
         """Translate content of ``src`` and get gold scores from ``tgt``.
 
         Args:
@@ -287,7 +288,7 @@ class Translator(object):
             raise ValueError("batch_size must be set")
 
         data = inputters.Dataset(
-            self.fields,
+            self.fields[encoder_id],
             readers=([self.src_reader, self.tgt_reader]
                      if tgt else [self.src_reader]),
             data=[("src", src), ("tgt", tgt)] if tgt else [("src", src)],
@@ -307,7 +308,7 @@ class Translator(object):
         )
 
         xlation_builder = onmt.translate.TranslationBuilder(
-            data, self.fields, self.n_best, self.replace_unk, tgt
+            data, self.fields[encoder_id], self.n_best, self.replace_unk, tgt
         )
 
         # Statistics
@@ -322,7 +323,7 @@ class Translator(object):
 
         for batch in data_iter:
             batch_data = self.translate_batch(
-                batch, data.src_vocabs, attn_debug
+                batch, data.src_vocabs, attn_debug, encoder_id
             )
             translations = xlation_builder.from_batch(batch_data)
 
@@ -408,7 +409,8 @@ class Translator(object):
             min_length=0,
             sampling_temp=1.0,
             keep_topk=-1,
-            return_attention=False):
+            return_attention=False,
+            encoder_id=0):
         """Alternative to beam search. Do random sampling at each step."""
 
         assert self.beam_size == 1
@@ -492,7 +494,7 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug):
+    def translate_batch(self, batch, src_vocabs, attn_debug, encoder_id):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if self.beam_size == 1:
@@ -503,7 +505,8 @@ class Translator(object):
                     min_length=self.min_length,
                     sampling_temp=self.random_sampling_temp,
                     keep_topk=self.sample_from_topk,
-                    return_attention=attn_debug or self.replace_unk)
+                    return_attention=attn_debug or self.replace_unk,
+                    encoder_id=encoder_id)
             else:
                 return self._translate_batch(
                     batch,
@@ -512,13 +515,14 @@ class Translator(object):
                     min_length=self.min_length,
                     ratio=self.ratio,
                     n_best=self.n_best,
-                    return_attention=attn_debug or self.replace_unk)
+                    return_attention=attn_debug or self.replace_unk,
+                    encoder_id=encoder_id)
 
-    def _run_encoder(self, batch):
+    def _run_encoder(self, batch, encoder_id):
         src, src_lengths = batch.src if isinstance(batch.src, tuple) \
                            else (batch.src, None)
 
-        enc_states, memory_bank, src_lengths = self.model.encoder(
+        enc_states, memory_bank, src_lengths = self.model.encoder[encoder_id](
             src, src_lengths)
         if src_lengths is None:
             assert not isinstance(memory_bank, tuple), \
@@ -594,7 +598,8 @@ class Translator(object):
             min_length=0,
             ratio=0.,
             n_best=1,
-            return_attention=False):
+            return_attention=False,
+            encoder_id=0):
         # TODO: support these blacklisted features.
         assert not self.dump_beam
 
@@ -604,7 +609,7 @@ class Translator(object):
         batch_size = batch.batch_size
 
         # (1) Run the encoder on the src.
-        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch)
+        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch,encoder_id)
         self.model.decoder.init_state(src, memory_bank, enc_states)
 
         results = {

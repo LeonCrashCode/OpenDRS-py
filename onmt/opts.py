@@ -546,7 +546,10 @@ def translate_opts(parser):
     group = parser.add_argument_group('Data')
     group.add('--data_type', '-data_type', default="text",
               help="Type of the source input. Options: [text|img].")
-
+    group.add('--encoder_num', '-encoder_num', type=int, required=True,
+              help='The number of encoders')
+    group.add('--encoder_id', '-encoder_id', type=int, required=True,
+              help='the ID of the encoder that is selected for testing.')
     group.add('--src', '-src', required=True,
               help="Source sequence to decode (one line per "
                    "sequence)")
