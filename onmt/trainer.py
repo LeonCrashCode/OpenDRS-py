@@ -160,7 +160,8 @@ class Trainer(object):
               save_checkpoint_steps=5000,
               valid_iter=None,
               valid_steps=10000,
-              encoder_id=0):
+              encoder_id=0,
+              generator_id=0):
         """
         The main training loop by iterating over `train_iter` and possibly
         running validation on `valid_iter`.
@@ -208,7 +209,7 @@ class Trainer(object):
 
             self._gradient_accumulation(
                 batches, normalization, total_stats,
-                report_stats, encoder_id)
+                report_stats, encoder_id,generator_id)
 
             if self.average_decay > 0 and i % self.average_every == 0:
                 self._update_average(step)
@@ -290,7 +291,7 @@ class Trainer(object):
         return stats
 
     def _gradient_accumulation(self, true_batches, normalization, total_stats,
-                               report_stats, encoder_id):
+                               report_stats, encoder_id, generator_id):
         if self.grad_accum_count > 1:
             self.optim.zero_grad()
 
@@ -317,7 +318,7 @@ class Trainer(object):
                 # 2. F-prop all but generator.
                 if self.grad_accum_count == 1:
                     self.optim.zero_grad()
-                outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt, encoder_id=encoder_id)
+                outputs, attns = self.model(src, tgt, src_lengths, bptt=bptt, encoder_id=encoder_id, generator_id=generator_id)
                 bptt = True
 
                 # 3. Compute loss.

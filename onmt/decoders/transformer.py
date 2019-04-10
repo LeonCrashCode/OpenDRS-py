@@ -176,7 +176,7 @@ class TransformerDecoder(DecoderBase):
     def detach_state(self):
         self.state["src"] = self.state["src"].detach()
 
-    def forward(self, tgt, memory_bank, step=None, **kwargs):
+    def forward(self, tgt, memory_bank, step=None, generator_id=0,**kwargs):
         """Decode, possibly stepwise."""
         if step == 0:
             self._init_cache(memory_bank)
@@ -187,13 +187,13 @@ class TransformerDecoder(DecoderBase):
         src_batch, src_len = src_words.size()
         tgt_batch, tgt_len = tgt_words.size()
 
-        emb = self.embeddings(tgt, step=step)
+        emb = self.embeddings[generator_id](tgt, step=step)
         assert emb.dim() == 3  # len x batch x embedding_dim
 
         output = emb.transpose(0, 1).contiguous()
         src_memory_bank = memory_bank.transpose(0, 1).contiguous()
 
-        pad_idx = self.embeddings.word_padding_idx
+        pad_idx = self.embeddings[generator_id].word_padding_idx
         src_pad_mask = src_words.data.eq(pad_idx).unsqueeze(1)  # [B, 1, T_src]
         tgt_pad_mask = tgt_words.data.eq(pad_idx).unsqueeze(1)  # [B, 1, T_tgt]
 

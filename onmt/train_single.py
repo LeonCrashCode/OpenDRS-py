@@ -109,6 +109,9 @@ def main(opt, device_id):
     if opt.single_pass and train_steps > 0:
         logger.warning("Option single_pass is enabled, ignoring train_steps.")
         train_steps = 0
+
+    logger.info("Training the encoder: %d" % opt.encoder_id)
+    logger.info("Training the generator: %d " % opt.generator_id)
     trainer.train(
         train_iter,
         train_steps,
@@ -116,7 +119,8 @@ def main(opt, device_id):
         save_checkpoint_steps=opt.save_checkpoint_steps,
         valid_iter=valid_iter,
         valid_steps=opt.valid_steps,
-        encoder_id=opt.encoder_id)
+        encoder_id=opt.encoder_id,
+        generator_id=opt.generator_id)
 
     if opt.tensorboard:
         trainer.report_manager.tensorboard_writer.close()
