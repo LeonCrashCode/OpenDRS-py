@@ -265,7 +265,8 @@ class Translator(object):
             src_dir=None,
             batch_size=None,
             attn_debug=False,
-	    encoder_id=0):
+	    encoder_id=0,
+        generator_id=0):
         """Translate content of ``src`` and get gold scores from ``tgt``.
 
         Args:
@@ -323,7 +324,7 @@ class Translator(object):
 
         for batch in data_iter:
             batch_data = self.translate_batch(
-                batch, data.src_vocabs, attn_debug, encoder_id
+                batch, data.src_vocabs, attn_debug, encoder_id, generator_id
             )
             translations = xlation_builder.from_batch(batch_data)
 
@@ -461,7 +462,8 @@ class Translator(object):
                 memory_lengths=memory_lengths,
                 src_map=src_map,
                 step=step,
-                batch_offset=random_sampler.select_indices
+                batch_offset=random_sampler.select_indices,
+                generator_id=generator_id
             )
 
             random_sampler.advance(log_probs, attn)
@@ -494,7 +496,7 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug, encoder_id):
+    def translate_batch(self, batch, src_vocabs, attn_debug, encoder_id, generator_id):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if self.beam_size == 1:
@@ -506,7 +508,8 @@ class Translator(object):
                     sampling_temp=self.random_sampling_temp,
                     keep_topk=self.sample_from_topk,
                     return_attention=attn_debug or self.replace_unk,
-                    encoder_id=encoder_id)
+                    encoder_id=encoder_id,
+                    generator_id=generator_id)
             else:
                 return self._translate_batch(
                     batch,
@@ -516,7 +519,8 @@ class Translator(object):
                     ratio=self.ratio,
                     n_best=self.n_best,
                     return_attention=attn_debug or self.replace_unk,
-                    encoder_id=encoder_id)
+                    encoder_id=encoder_id,
+                    generator_id=generator_id)
 
     def _run_encoder(self, batch, encoder_id):
         src, src_lengths = batch.src if isinstance(batch.src, tuple) \
@@ -542,7 +546,8 @@ class Translator(object):
             memory_lengths,
             src_map=None,
             step=None,
-            batch_offset=None):
+            batch_offset=None,
+            generator_id=0):
         if self.copy_attn:
             # Turn any copied words into UNKs.
             decoder_in = decoder_in.masked_fill(
@@ -554,7 +559,7 @@ class Translator(object):
         # in case of inference tgt_len = 1, batch = beam times batch_size
         # in case of Gold Scoring tgt_len = actual length, batch = 1 batch
         dec_out, dec_attn = self.model.decoder(
-            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step
+            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step, generator_id=generator_id
         )
 
         # Generator forward.
@@ -599,7 +604,8 @@ class Translator(object):
             ratio=0.,
             n_best=1,
             return_attention=False,
-            encoder_id=0):
+            encoder_id=0,
+            generator_id=0):
         # TODO: support these blacklisted features.
         assert not self.dump_beam
 
@@ -609,7 +615,7 @@ class Translator(object):
         batch_size = batch.batch_size
 
         # (1) Run the encoder on the src.
-        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch,encoder_id)
+        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch, encoder_id)
         self.model.decoder.init_state(src, memory_bank, enc_states)
 
         results = {
@@ -666,7 +672,8 @@ class Translator(object):
                 memory_lengths=memory_lengths,
                 src_map=src_map,
                 step=step,
-                batch_offset=beam._batch_offset)
+                batch_offset=beam._batch_offset,
+                generator_id=generator_id)
 
             beam.advance(log_probs, attn)
             any_beam_is_finished = beam.is_finished.any()
