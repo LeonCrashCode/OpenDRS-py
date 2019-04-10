@@ -274,7 +274,7 @@ class Trainer(object):
                 tgt = batch.tgt
 
                 # F-prop through the model.
-                outputs, attns = valid_model(src, tgt, src_lengths, bptt=False, encoder_id=encoder_id, generator_id)
+                outputs, attns = valid_model(src, tgt, src_lengths, bptt=False, encoder_id=encoder_id, generator_id=generator_id)
 
                 # Compute loss.
                 _, batch_stats = self.valid_loss(batch, outputs, attns)
