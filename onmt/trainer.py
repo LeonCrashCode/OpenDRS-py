@@ -209,7 +209,7 @@ class Trainer(object):
 
             self._gradient_accumulation(
                 batches, normalization, total_stats,
-                report_stats, encoder_id,generator_id)
+                report_stats, encoder_id, generator_id)
 
             if self.average_decay > 0 and i % self.average_every == 0:
                 self._update_average(step)
@@ -224,7 +224,7 @@ class Trainer(object):
                     logger.info('GpuRank %d: validate step %d'
                                 % (self.gpu_rank, step))
                 valid_stats = self.validate(
-                    valid_iter, encoder_id, moving_average=self.moving_average)
+                    valid_iter, encoder_id, generator_id, moving_average=self.moving_average)
                 if self.gpu_verbose_level > 0:
                     logger.info('GpuRank %d: gather valid stat \
                                 step %d' % (self.gpu_rank, step))
@@ -247,7 +247,7 @@ class Trainer(object):
             self.model_saver.save(step, moving_average=self.moving_average)
         return total_stats
 
-    def validate(self, valid_iter, encoder_id, moving_average=None):
+    def validate(self, valid_iter, encoder_id, generator_id, moving_average=None):
         """ Validate model.
             valid_iter: validate data iterator
         Returns:
@@ -274,7 +274,7 @@ class Trainer(object):
                 tgt = batch.tgt
 
                 # F-prop through the model.
-                outputs, attns = valid_model(src, tgt, src_lengths, bptt=False, encoder_id=encoder_id)
+                outputs, attns = valid_model(src, tgt, src_lengths, bptt=False, encoder_id=encoder_id, generator_id)
 
                 # Compute loss.
                 _, batch_stats = self.valid_loss(batch, outputs, attns)
