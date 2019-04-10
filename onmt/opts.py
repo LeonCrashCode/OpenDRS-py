@@ -306,10 +306,10 @@ def train_opts(parser):
               help='The number of encoders')
     group.add('--encoder_id', '-encoder_id', type=int, required=True,
               help='the ID of the encoder that is selected for training.')
-    group.add('--generator_num', '-generator_num', type=int, required=True,
+    group.add('--generator_num', '-generator_num', type=int, default=1,
               help='The number of generator, which should be the same'
                     'to the number of encoder, or 1')
-    group.add('--generator_id', '-generator_id', type=int, required=True,
+    group.add('--generator_id', '-generator_id', type=int, default=0,
               help='the ID of the generator that is selected for training.')
     group.add('--data', '-data', required=True,
               help='Path prefix to the ".train.pt" and '
@@ -555,10 +555,10 @@ def translate_opts(parser):
               help='The number of encoders')
     group.add('--encoder_id', '-encoder_id', type=int, required=True,
               help='the ID of the encoder that is selected for testing.')
-    group.add('--generator_num', '-generator_num', type=int, required=True,
+    group.add('--generator_num', '-generator_num', type=int, default=1,
               help='The number of generator, which should be the same'
                     'to the number of encoder, or 1')
-    group.add('--generator_id', '-generator_id', type=int, required=True,
+    group.add('--generator_id', '-generator_id', type=int, default=0,
               help='the ID of the generator that is selected for testing.')
     group.add('--src', '-src', required=True,
               help="Source sequence to decode (one line per "
