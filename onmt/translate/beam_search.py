@@ -107,11 +107,14 @@ class BeamSearch(DecodeStrategy):
     @property
     def current_predictions(self):
         return self.alive_seq[:, -1]
-
+    
     @property
     def current_origin(self):
         return self.select_indices
-
+    @property
+    def current_scores(self):
+        return self.topk_scores
+    
     @property
     def current_backptr(self):
         # for testing
@@ -122,6 +125,8 @@ class BeamSearch(DecodeStrategy):
         vocab_size = log_probs.size(-1)
 
         # using integer division to get an integer _B without casting
+
+        
         _B = log_probs.shape[0] // self.beam_size
 
         if self._stepwise_cov_pen and self._prev_penalty is not None:
@@ -137,6 +142,7 @@ class BeamSearch(DecodeStrategy):
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)
 
+
         self.block_ngram_repeats(log_probs)
 
         # if the sequence ends now, then the penalty is the current
@@ -147,6 +153,8 @@ class BeamSearch(DecodeStrategy):
         # Flatten probs into a list of possibilities.
         curr_scores = log_probs / length_penalty
         curr_scores = curr_scores.reshape(_B, self.beam_size * vocab_size)
+
+        
         torch.topk(curr_scores,  self.beam_size, dim=-1,
                    out=(self.topk_scores, self.topk_ids))
 
@@ -154,19 +162,24 @@ class BeamSearch(DecodeStrategy):
         # Length penalty is just a scalar. It doesn't matter if it's applied
         # before or after the topk.
         torch.mul(self.topk_scores, length_penalty, out=self.topk_log_probs)
-
+        #print(self.topk_log_probs)
         # Resolve beam origin and map to batch index flat representation.
+        #print(self.topk_ids,vocab_size)
         torch.div(self.topk_ids, vocab_size, out=self._batch_index)
+        #print(self._batch_index)
+        #print(self._beam_offset[:_B])
         self._batch_index += self._beam_offset[:_B].unsqueeze(1)
+        #print(self._batch_index)
         self.select_indices = self._batch_index.view(_B * self.beam_size)
-
+        #print(self.select_indices)
         self.topk_ids.fmod_(vocab_size)  # resolve true word ids
-
         # Append last prediction.
         self.alive_seq = torch.cat(
             [self.alive_seq.index_select(0, self.select_indices),
              self.topk_ids.view(_B * self.beam_size, 1)], -1)
+
         if self.return_attention or self._cov_pen:
+
             current_attn = attn.index_select(1, self.select_indices)
             if step == 1:
                 self.alive_attn = current_attn
@@ -186,7 +199,6 @@ class BeamSearch(DecodeStrategy):
                     self._prev_penalty = self.global_scorer.cov_penalty(
                         self._coverage, beta=self.global_scorer.beta).view(
                             _B, self.beam_size)
-
         if self._vanilla_cov_pen:
             # shape: (batch_size x beam_size, 1)
             cov_penalty = self.global_scorer.cov_penalty(
@@ -195,7 +207,10 @@ class BeamSearch(DecodeStrategy):
             self.topk_scores -= cov_penalty.view(_B, self.beam_size)
 
         self.is_finished = self.topk_ids.eq(self.eos)
+
         self.ensure_max_length()
+
+        return self.select_indices 
 
     def update_finished(self):
         # Penalize beams that finished.

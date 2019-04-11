@@ -18,6 +18,7 @@ from onmt.translate.random_sampling import RandomSampling
 from onmt.utils.misc import tile, set_random_seed
 from onmt.modules.copy_generator import collapse_copy_scores
 
+from onmt.translate.state import BB_sequence_state as BB_sequence_state
 
 def build_translator(opt, report_score=True, logger=None, out_file=None):
     if out_file is None:
@@ -180,7 +181,8 @@ class Translator(object):
                 "beam_parent_ids": [],
                 "scores": [],
                 "log_probs": []}
-
+        self.encoder_id = encoder_id
+        self.generator_id = generator_id
         set_random_seed(seed, self._use_cuda)
 
     @classmethod
@@ -268,9 +270,7 @@ class Translator(object):
             tgt=None,
             src_dir=None,
             batch_size=None,
-            attn_debug=False,
-            encoder_id=0,
-            generator_id=0):
+            attn_debug=False):
         """Translate content of ``src`` and get gold scores from ``tgt``.
 
         Args:
@@ -293,7 +293,7 @@ class Translator(object):
             raise ValueError("batch_size must be set")
 
         data = inputters.Dataset(
-            self.fields[encoder_id],
+            self.fields[self.encoder_id],
             readers=([self.src_reader, self.tgt_reader]
                      if tgt else [self.src_reader]),
             data=[("src", src), ("tgt", tgt)] if tgt else [("src", src)],
@@ -313,7 +313,7 @@ class Translator(object):
         )
 
         xlation_builder = onmt.translate.TranslationBuilder(
-            data, self.fields[encoder_id], self.n_best, self.replace_unk, tgt
+            data, self.fields[self.encoder_id], self.n_best, self.replace_unk, tgt
         )
 
         # Statistics
@@ -328,7 +328,7 @@ class Translator(object):
 
         for batch in data_iter:
             batch_data = self.translate_batch(
-                batch, data.src_vocabs, attn_debug, encoder_id, generator_id
+                batch, data.src_vocabs, attn_debug
             )
             translations = xlation_builder.from_batch(batch_data)
 
@@ -414,9 +414,7 @@ class Translator(object):
             min_length=0,
             sampling_temp=1.0,
             keep_topk=-1,
-            return_attention=False,
-            encoder_id=0,
-            generator_id=0):
+            return_attention=False):
         """Alternative to beam search. Do random sampling at each step."""
 
         assert self.beam_size == 1
@@ -427,7 +425,7 @@ class Translator(object):
         batch_size = batch.batch_size
 
         # Encoder forward.
-        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch, encoder_id)
+        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch)
         self.model.decoder.init_state(src, memory_bank, enc_states)
 
         use_src_map = self.copy_attn
@@ -467,8 +465,7 @@ class Translator(object):
                 memory_lengths=memory_lengths,
                 src_map=src_map,
                 step=step,
-                batch_offset=random_sampler.select_indices,
-                generator_id=generator_id
+                batch_offset=random_sampler.select_indices
             )
 
             random_sampler.advance(log_probs, attn)
@@ -501,7 +498,7 @@ class Translator(object):
         results["attention"] = random_sampler.attention
         return results
 
-    def translate_batch(self, batch, src_vocabs, attn_debug, encoder_id, generator_id):
+    def translate_batch(self, batch, src_vocabs, attn_debug):
         """Translate a batch of sentences."""
         with torch.no_grad():
             if self.beam_size == 1:
@@ -512,9 +509,7 @@ class Translator(object):
                     min_length=self.min_length,
                     sampling_temp=self.random_sampling_temp,
                     keep_topk=self.sample_from_topk,
-                    return_attention=attn_debug or self.replace_unk,
-                    encoder_id=encoder_id,
-                    generator_id=generator_id)
+                    return_attention=attn_debug or self.replace_unk)
             else:
                 return self._translate_batch(
                     batch,
@@ -523,15 +518,13 @@ class Translator(object):
                     min_length=self.min_length,
                     ratio=self.ratio,
                     n_best=self.n_best,
-                    return_attention=attn_debug or self.replace_unk,
-                    encoder_id=encoder_id,
-                    generator_id=generator_id)
+                    return_attention=attn_debug or self.replace_unk)
 
-    def _run_encoder(self, batch, encoder_id):
+    def _run_encoder(self, batch):
         src, src_lengths = batch.src if isinstance(batch.src, tuple) \
                            else (batch.src, None)
 
-        enc_states, memory_bank, src_lengths = self.model.encoder[encoder_id](
+        enc_states, memory_bank, src_lengths = self.model.encoder[self.encoder_id](
             src, src_lengths)
         if src_lengths is None:
             assert not isinstance(memory_bank, tuple), \
@@ -545,14 +538,17 @@ class Translator(object):
     def _decode_and_generate(
             self,
             decoder_in,
+            states,
             memory_bank,
             batch,
             src_vocabs,
             memory_lengths,
             src_map=None,
             step=None,
-            batch_offset=None,
-            generator_id=0):
+            batch_offset=None):
+
+        masks, expand_masks = states.get_mask()
+
         if self.copy_attn:
             # Turn any copied words into UNKs.
             decoder_in = decoder_in.masked_fill(
@@ -563,7 +559,7 @@ class Translator(object):
         # in case of inference tgt_len = 1, batch = beam times batch_size
         # in case of Gold Scoring tgt_len = actual length, batch = 1 batch
         dec_out, dec_attn = self.model.decoder(
-            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step, generator_id=generator_id
+            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step, generator_id=self.generator_id
         )
 
         # Generator forward.
@@ -572,14 +568,21 @@ class Translator(object):
                 attn = dec_attn["std"]
             else:
                 attn = None
-            log_probs = self.model.generator[generator_id](dec_out.squeeze(0))
+            log_probs = self.model.generator[self.generator_id](dec_out.squeeze(0))
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
+            log_probs = log_probs.exp().mul(masks).log()
+
         else:
             attn = dec_attn["copy"]
-            scores = self.model.generator[generator_id](dec_out.view(-1, dec_out.size(2)),
+            #print(dec_out.size())
+            #print(attn.size())
+            scores = self.model.generator[self.generator_id](dec_out.view(-1, dec_out.size(2)),
                                           attn.view(-1, attn.size(2)),
                                           src_map)
+
+            #print(scores.size())
+            #print(batch_offset)
             # here we have scores [tgt_lenxbatch, vocab] or [beamxbatch, vocab]
             if batch_offset is None:
                 scores = scores.view(batch.batch_size, -1, scores.size(-1))
@@ -592,9 +595,16 @@ class Translator(object):
                 src_vocabs,
                 batch_dim=0,
                 batch_offset=batch_offset
-            )
+            ) # some copied words are the same, the scores of the same word should be sumed.
+
             scores = scores.view(decoder_in.size(0), -1, scores.size(-1))
+            expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
+
+            masks = torch.cat([masks, expand_masks], 1)
+            scores = scores.mul(masks)
+
             log_probs = scores.squeeze(0).log()
+
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
         return log_probs, attn
@@ -607,9 +617,7 @@ class Translator(object):
             min_length=0,
             ratio=0.,
             n_best=1,
-            return_attention=False,
-            encoder_id=0,
-            generator_id=0):
+            return_attention=False):
         # TODO: support these blacklisted features.
         assert not self.dump_beam
 
@@ -619,7 +627,7 @@ class Translator(object):
         batch_size = batch.batch_size
 
         # (1) Run the encoder on the src.
-        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch, encoder_id)
+        src, enc_states, memory_bank, src_lengths = self._run_encoder(batch)
         self.model.decoder.init_state(src, memory_bank, enc_states)
 
         results = {
@@ -665,19 +673,30 @@ class Translator(object):
             exclusion_tokens=self._exclusion_idxs,
             memory_lengths=memory_lengths)
 
+        itos = self.fields[self.generator_id]["tgt"].base_field.vocab.itos
+        stoi = self.fields[self.generator_id]["tgt"].base_field.vocab.stoi
+
+        states = BB_sequence_state(
+            itos,
+            stoi,
+            mb_device,
+            batch_size,
+            beam_size,
+            eos=self._tgt_eos_idx)
+
         for step in range(max_length):
             decoder_input = beam.current_predictions.view(1, -1, 1)
-
+            #print(decoder_input)
             log_probs, attn = self._decode_and_generate(
                 decoder_input,
+                states,
                 memory_bank,
                 batch,
                 src_vocabs,
                 memory_lengths=memory_lengths,
                 src_map=src_map,
                 step=step,
-                batch_offset=beam._batch_offset,
-                generator_id=generator_id)
+                batch_offset=beam._batch_offset)
 
             beam.advance(log_probs, attn)
             any_beam_is_finished = beam.is_finished.any()
@@ -687,6 +706,14 @@ class Translator(object):
                     break
 
             select_indices = beam.current_origin
+            lastest_action = beam.current_predictions
+            lastest_score = beam.current_scores.view(-1)
+
+            #print(select_indices)
+            #print(lastest_action)
+            #print([itos[act] for act in lastest_action])
+            #print(lastest_score)
+            states.update(select_indices, lastest_action, lastest_score)
 
             if any_beam_is_finished:
                 # Reorder states.

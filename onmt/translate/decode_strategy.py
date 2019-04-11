@@ -71,6 +71,7 @@ class DecodeStrategy(object):
         self.alive_seq = torch.full(
             [batch_size * parallel_paths, 1], self.bos,
             dtype=torch.long, device=device)
+
         self.is_finished = torch.zeros(
             [batch_size, parallel_paths],
             dtype=torch.uint8, device=device)
@@ -100,6 +101,7 @@ class DecodeStrategy(object):
     def block_ngram_repeats(self, log_probs):
         cur_len = len(self)
         if self.block_ngram_repeat > 0 and cur_len > 1:
+            print("here")
             for path_idx in range(self.alive_seq.shape[0]):
                 # skip BOS
                 hyp = self.alive_seq[path_idx, 1:]

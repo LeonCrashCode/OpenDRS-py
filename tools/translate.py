@@ -30,8 +30,6 @@ def main(opt):
             src_dir=opt.src_dir,
             batch_size=opt.batch_size,
             attn_debug=opt.attn_debug,
-            encoder_id=opt.encoder_id,
-            generator_id=opt.generator_id
             )
 
 
