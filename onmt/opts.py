@@ -302,9 +302,9 @@ def train_opts(parser):
     """ Training and saving options """
 
     group = parser.add_argument_group('General')
-    group.add('--encoder_num', '-encoder_num', type=int, required=True,
+    group.add('--encoder_num', '-encoder_num', type=int, default=1,
               help='The number of encoders')
-    group.add('--encoder_id', '-encoder_id', type=int, required=True,
+    group.add('--encoder_id', '-encoder_id', type=int, default=0,
               help='the ID of the encoder that is selected for training.')
     group.add('--generator_num', '-generator_num', type=int, default=1,
               help='The number of generator, which should be the same'
@@ -551,9 +551,9 @@ def translate_opts(parser):
     group = parser.add_argument_group('Data')
     group.add('--data_type', '-data_type', default="text",
               help="Type of the source input. Options: [text|img].")
-    group.add('--encoder_num', '-encoder_num', type=int, required=True,
+    group.add('--encoder_num', '-encoder_num', type=int, default=1,
               help='The number of encoders')
-    group.add('--encoder_id', '-encoder_id', type=int, required=True,
+    group.add('--encoder_id', '-encoder_id', type=int, default=0,
               help='the ID of the encoder that is selected for testing.')
     group.add('--generator_num', '-generator_num', type=int, default=1,
               help='The number of generator, which should be the same'
