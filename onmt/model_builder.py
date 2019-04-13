@@ -88,8 +88,8 @@ def load_test_model(opt, model_path=None):
     ArgumentParser.update_model_opts(model_opt)
     ArgumentParser.validate_model_opts(model_opt)
     vocab = checkpoint['vocab']
-    if inputters.old_style_vocab(vocab[0]):
-        fields = [inputters.load_old_vocab(vocab[i], opt.data_type, dynamic_dict=opt.copy_attn) for i in range(int(opt.encoder_num))]
+    if inputters.old_style_vocab(vocab):
+        fields = inputters.load_old_vocab(vocab, opt.data_type, dynamic_dict=opt.copy_attn)
         #fields = inputters.load_old_vocab(
         #    vocab, opt.data_type, dynamic_dict=model_opt.copy_attn
         #)
@@ -127,16 +127,16 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
     if model_opt.model_type == "text":
         #src_field = fields["src"]
         #src_emb = build_embeddings(model_opt, src_field)
-        src_emb = [build_embeddings(model_opt, fields[i]["src"]) for i in range(model_opt.encoder_num)]
+        src_emb = build_embeddings(model_opt, fields["src"]) 
     else:
         src_emb = None
 
     # Build encoder.
 
-    encoder = nn.ModuleList([build_encoder(model_opt, src_emb[i]) for i in range(model_opt.encoder_num)])
+    encoder = build_encoder(model_opt, src_emb[i])
     # Build decoder.
     # tgt_field = fields[0]["tgt"]
-    tgt_emb = nn.ModuleList([build_embeddings(model_opt, fields[i]["tgt"], for_encoder=False) for i in range(model_opt.generator_num)])
+    tgt_emb = build_embeddings(model_opt, fields["tgt"], for_encoder=False)
 
     # Share the embedding matrix - preprocess with share_vocab required.
     #if model_opt.share_embeddings:
@@ -163,22 +163,20 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
             gen_func = onmt.modules.sparse_activations.LogSparsemax(dim=-1)
         else:
             gen_func = nn.LogSoftmax(dim=-1)
-        generator = nn.ModuleList([nn.Sequential(
+        generator = nn.Sequential(
             nn.Linear(model_opt.dec_rnn_size,
                       len(fields[i]["tgt"].base_field.vocab)),
             Cast(torch.float32),
             gen_func
-        ) for i in range(model_opt.generator_num)])
-        #if model_opt.share_decoder_embeddings:
-        if False:
+        )
+        if model_opt.share_decoder_embeddings:
             generator[0].weight = decoder.embeddings.word_lut.weight
     else:
         #tgt_base_field = tgt_field.base_field
-        tgt_base_field = fields[0]["tgt"].base_field
+        tgt_base_field = fields["tgt"].base_field
         #vocab_size = len(tgt_base_field.vocab)
         pad_idx = tgt_base_field.vocab.stoi[tgt_base_field.pad_token]
-        generator = nn.ModuleList([
-            CopyGenerator(model_opt.dec_rnn_size, len(fields[i]["tgt"].base_field.vocab), pad_idx) for i in range(model_opt.generator_num)])
+        generator = CopyGenerator(model_opt.dec_rnn_size, len(tgt_base_field.vocab), pad_idx)
 
     # Load the model states from checkpoint or initialize them.
     if checkpoint is not None:
@@ -210,14 +208,11 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
                 if p.dim() > 1:
                     xavier_uniform_(p)
 
-        #if hasattr(model.encoder, 'embeddings'):
-        if True:
-            for i in range(model_opt.encoder_num):
-                model.encoder[i].embeddings.load_pretrained_vectors(
-                    model_opt.pre_word_vecs_enc[i])
+        if hasattr(model.encoder, 'embeddings'):
+                model.encoder.embeddings.load_pretrained_vectors(
+                    model_opt.pre_word_vecs_enc)
         if hasattr(model.decoder, 'embeddings'):
-            for i in range(model_opt.generator_num):
-                model.decoder.embeddings[i].load_pretrained_vectors(
+                model.decoder.embeddings.load_pretrained_vectors(
                     model_opt.pre_word_vecs_dec)
 
     model.generator = generator

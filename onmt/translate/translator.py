@@ -113,12 +113,10 @@ class Translator(object):
             out_file=None,
             report_score=True,
             logger=None,
-            seed=-1,
-            encoder_id=0,
-            generator_id=0):
+            seed=-1):
         self.model = model
         self.fields = fields
-        tgt_field = dict(self.fields[generator_id])["tgt"].base_field
+        tgt_field = dict(self.fields)["tgt"].base_field
         self._tgt_vocab = tgt_field.vocab
         self._tgt_eos_idx = self._tgt_vocab.stoi[tgt_field.eos_token]
         self._tgt_pad_idx = self._tgt_vocab.stoi[tgt_field.pad_token]
@@ -181,8 +179,6 @@ class Translator(object):
                 "beam_parent_ids": [],
                 "scores": [],
                 "log_probs": []}
-        self.encoder_id = encoder_id
-        self.generator_id = generator_id
         set_random_seed(seed, self._use_cuda)
 
     @classmethod
@@ -243,9 +239,7 @@ class Translator(object):
             out_file=out_file,
             report_score=report_score,
             logger=logger,
-            seed=opt.seed,
-            encoder_id=opt.encoder_id,
-            generator_id=opt.generator_id)
+            seed=opt.seed)
 
     def _log(self, msg):
         if self.logger:
@@ -293,7 +287,7 @@ class Translator(object):
             raise ValueError("batch_size must be set")
 
         data = inputters.Dataset(
-            self.fields[self.encoder_id],
+            self.fields,
             readers=([self.src_reader, self.tgt_reader]
                      if tgt else [self.src_reader]),
             data=[("src", src), ("tgt", tgt)] if tgt else [("src", src)],
@@ -313,7 +307,7 @@ class Translator(object):
         )
 
         xlation_builder = onmt.translate.TranslationBuilder(
-            data, self.fields[self.encoder_id], self.n_best, self.replace_unk, tgt
+            data, self.fields, self.n_best, self.replace_unk, tgt
         )
 
         # Statistics
@@ -524,7 +518,7 @@ class Translator(object):
         src, src_lengths = batch.src if isinstance(batch.src, tuple) \
                            else (batch.src, None)
 
-        enc_states, memory_bank, src_lengths = self.model.encoder[self.encoder_id](
+        enc_states, memory_bank, src_lengths = self.model.encoder(
             src, src_lengths)
         if src_lengths is None:
             assert not isinstance(memory_bank, tuple), \
@@ -559,7 +553,7 @@ class Translator(object):
         # in case of inference tgt_len = 1, batch = beam times batch_size
         # in case of Gold Scoring tgt_len = actual length, batch = 1 batch
         dec_out, dec_attn = self.model.decoder(
-            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step, generator_id=self.generator_id
+            decoder_in, memory_bank, memory_lengths=memory_lengths, step=step
         )
 
         # Generator forward.
@@ -568,7 +562,7 @@ class Translator(object):
                 attn = dec_attn["std"]
             else:
                 attn = None
-            log_probs = self.model.generator[self.generator_id](dec_out.squeeze(0))
+            log_probs = self.model.generator(dec_out.squeeze(0))
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
             log_probs = log_probs.exp().mul(masks).log()
@@ -577,7 +571,7 @@ class Translator(object):
             attn = dec_attn["copy"]
             #print(dec_out.size())
             #print(attn.size())
-            scores = self.model.generator[self.generator_id](dec_out.view(-1, dec_out.size(2)),
+            scores = self.model.generator(dec_out.view(-1, dec_out.size(2)),
                                           attn.view(-1, attn.size(2)),
                                           src_map)
 
@@ -673,8 +667,8 @@ class Translator(object):
             exclusion_tokens=self._exclusion_idxs,
             memory_lengths=memory_lengths)
 
-        itos = self.fields[self.generator_id]["tgt"].base_field.vocab.itos
-        stoi = self.fields[self.generator_id]["tgt"].base_field.vocab.stoi
+        itos = self.fields["tgt"].base_field.vocab.itos
+        stoi = self.fields["tgt"].base_field.vocab.stoi
 
         states = BB_sequence_state(
             itos,

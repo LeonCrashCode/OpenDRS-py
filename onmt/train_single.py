@@ -58,20 +58,18 @@ def main(opt, device_id):
     else:
         checkpoint = None
         model_opt = opt
-        vocab = []
-        for i in range(int(opt.encoder_num)):
-            vocab.append(torch.load(opt.data + '.'+str(i)+'.vocab.pt'))
+        vocab = torch.load(opt.data + '.vocab.pt')
 
     # check for code where vocab is saved instead of fields
     # (in the future this will be done in a smarter way)
-    if old_style_vocab(vocab[0]):
-        fields = [load_old_vocab(vocab[i], opt.model_type, dynamic_dict=opt.copy_attn) for i in range(int(opt.encoder_num))]
+    if old_style_vocab(vocab):
+        fields = load_old_vocab(vocab, opt.model_type, dynamic_dict=opt.copy_attn)
     else:
         fields = vocab
 
     # Report src and tgt vocab sizes, including for features
     for side in ['src', 'tgt']:
-        f = fields[opt.encoder_id][side]
+        f = fields[side]
         try:
             f_iter = iter(f)
         except TypeError:
@@ -95,11 +93,11 @@ def main(opt, device_id):
     model_saver = build_model_saver(model_opt, opt, model, fields, optim)
 
     trainer = build_trainer(
-        opt, device_id, model, fields[opt.encoder_id], optim, model_saver=model_saver)
+        opt, device_id, model, fields, optim, model_saver=model_saver)
 
-    train_iter = build_dataset_iter("train", fields[opt.encoder_id], opt)
+    train_iter = build_dataset_iter("train", fields, opt)
     valid_iter = build_dataset_iter(
-        "valid", fields[opt.encoder_id], opt, is_train=False)
+        "valid", fields, opt, is_train=False)
 
     if len(opt.gpu_ranks):
         logger.info('Starting training on GPU: %s' % opt.gpu_ranks)
@@ -110,17 +108,13 @@ def main(opt, device_id):
         logger.warning("Option single_pass is enabled, ignoring train_steps.")
         train_steps = 0
 
-    logger.info("Training the encoder: %d" % opt.encoder_id)
-    logger.info("Training the generator: %d " % opt.generator_id)
     trainer.train(
         train_iter,
         train_steps,
         train_interval_steps=opt.train_interval_steps,
         save_checkpoint_steps=opt.save_checkpoint_steps,
         valid_iter=valid_iter,
-        valid_steps=opt.valid_steps,
-        encoder_id=opt.encoder_id,
-        generator_id=opt.generator_id)
+        valid_steps=opt.valid_steps)
 
     if opt.tensorboard:
         trainer.report_manager.tensorboard_writer.close()

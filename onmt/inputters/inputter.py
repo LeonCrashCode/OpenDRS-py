@@ -619,7 +619,7 @@ def build_dataset_iter(corpus_type, fields, opt, is_train=True):
     but more sophisticated strategy like curriculum learning is ok too.
     """
     dataset_paths = list(sorted(
-        glob.glob(opt.data + '.' + corpus_type + '.'+str(opt.encoder_id)+'.pt')))
+        glob.glob(opt.data + '.' + corpus_type + '*.pt')))
     if not dataset_paths:
         return None
     batch_size = opt.batch_size if is_train else opt.valid_batch_size

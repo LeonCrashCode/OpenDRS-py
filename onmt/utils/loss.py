@@ -44,7 +44,7 @@ def build_loss_compute(model, tgt_field, opt, train=True):
     # passed to the NMTLossCompute. At the moment, the only supported
     # loss function of this kind is the sparsemax loss.
     use_raw_logits = isinstance(criterion, SparsemaxLoss)
-    loss_gen = model.generator[0] if use_raw_logits else model.generator[opt.generator_id]
+    loss_gen = model.generator[0] if use_raw_logits else model.generator
     if opt.copy_attn:
         compute = onmt.modules.CopyGeneratorLossCompute(
             criterion, loss_gen, tgt_field.vocab, opt.copy_loss_by_seqlength
