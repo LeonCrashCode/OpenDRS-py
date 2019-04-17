@@ -370,7 +370,6 @@ class Translator(object):
                         output += row_format.format(word, *row) + '\n'
                         row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
                     os.write(1, output.encode('utf-8'))
-            exit()
         end_time = time.time()
 
         if self.report_score:
