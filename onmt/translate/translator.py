@@ -113,7 +113,8 @@ class Translator(object):
             out_file=None,
             report_score=True,
             logger=None,
-            seed=-1):
+            seed=-1,
+            constraint=False):
         self.model = model
         self.fields = fields
         tgt_field = dict(self.fields)["tgt"].base_field
@@ -239,7 +240,8 @@ class Translator(object):
             out_file=out_file,
             report_score=report_score,
             logger=logger,
-            seed=opt.seed)
+            seed=opt.seed,
+            constraint=opt.constraint)
 
     def _log(self, msg):
         if self.logger:
@@ -368,7 +370,7 @@ class Translator(object):
                         output += row_format.format(word, *row) + '\n'
                         row_format = "{:>10.10} " + "{:>10.7f} " * len(srcs)
                     os.write(1, output.encode('utf-8'))
-
+            exit()
         end_time = time.time()
 
         if self.report_score:
@@ -447,12 +449,25 @@ class Translator(object):
             self._exclusion_idxs, return_attention, self.max_length,
             sampling_temp, keep_topk, memory_lengths)
 
+        itos = self.fields["tgt"].base_field.vocab.itos
+        stoi = self.fields["tgt"].base_field.vocab.stoi
+
+        states = BB_sequence_state(
+            itos,
+            stoi,
+            mb_device,
+            batch_size,
+            1,
+            eos=self._tgt_eos_idx)
+
         for step in range(max_length):
             # Shape: (1, B, 1)
+            #print("=============== step ", step)
             decoder_input = random_sampler.alive_seq[:, -1].view(1, -1, 1)
 
             log_probs, attn = self._decode_and_generate(
                 decoder_input,
+                states,
                 memory_bank,
                 batch,
                 src_vocabs,
@@ -463,6 +478,18 @@ class Translator(object):
             )
 
             random_sampler.advance(log_probs, attn)
+
+            lastest_action = random_sampler.current_predictions.data.tolist()
+            #print(lastest_action.data.tolist())
+            #for act in lastest_action.data.tolist():
+            #    if act < len(itos):
+            #        print(itos[act], end=" ")
+            #    else:
+            #        print("copy", end=" ")
+            #print()
+
+            states.update(lastest_action)
+
             any_batch_is_finished = random_sampler.is_finished.any()
             if any_batch_is_finished:
                 random_sampler.update_finished()
@@ -472,6 +499,7 @@ class Translator(object):
             if any_batch_is_finished:
                 select_indices = random_sampler.select_indices
 
+                states.index_select(select_indices)
                 # Reorder states.
                 if isinstance(memory_bank, tuple):
                     memory_bank = tuple(x.index_select(1, select_indices)
@@ -486,7 +514,6 @@ class Translator(object):
 
                 self.model.decoder.map_state(
                     lambda state, dim: state.index_select(dim, select_indices))
-
         results["scores"] = random_sampler.scores
         results["predictions"] = random_sampler.predictions
         results["attention"] = random_sampler.attention
@@ -541,7 +568,16 @@ class Translator(object):
             step=None,
             batch_offset=None):
 
-        masks, expand_masks = states.get_mask()
+        if states != None:
+            constraint = True
+        else:
+            constraint = False
+
+        if constraint:
+            masks, expand_masks = states.get_mask()
+        else:
+            masks = None
+            expand_masks = None
 
         if self.copy_attn:
             # Turn any copied words into UNKs.
@@ -555,7 +591,8 @@ class Translator(object):
         dec_out, dec_attn = self.model.decoder(
             decoder_in, memory_bank, memory_lengths=memory_lengths, step=step
         )
-
+        #print(decoder_in)
+        #print(masks)
         # Generator forward.
         if not self.copy_attn:
             if "std" in dec_attn:
@@ -565,7 +602,8 @@ class Translator(object):
             log_probs = self.model.generator(dec_out.squeeze(0))
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
-            log_probs = log_probs.exp().mul(masks).log()
+            if constraint:
+                log_probs = log_probs.exp().mul(masks).log()
 
         else:
             attn = dec_attn["copy"]
@@ -592,11 +630,13 @@ class Translator(object):
             ) # some copied words are the same, the scores of the same word should be sumed.
 
             scores = scores.view(decoder_in.size(0), -1, scores.size(-1))
-            expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
 
-            masks = torch.cat([masks, expand_masks], 1)
-            scores = scores.mul(masks)
-
+            #print(scores)
+            if constraint:
+                expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
+                masks = torch.cat([masks, expand_masks], 1)
+                scores = scores.mul(masks)
+            #print(scores)
             log_probs = scores.squeeze(0).log()
 
             # returns [(batch_size x beam_size) , vocab ] when 1 step
@@ -680,7 +720,9 @@ class Translator(object):
 
         for step in range(max_length):
             decoder_input = beam.current_predictions.view(1, -1, 1)
-            #print(decoder_input)
+            #print("================= step", step)
+            #print(decoder_input.size())
+            
             log_probs, attn = self._decode_and_generate(
                 decoder_input,
                 states,
@@ -693,24 +735,35 @@ class Translator(object):
                 batch_offset=beam._batch_offset)
 
             beam.advance(log_probs, attn)
+
+            lastest_action = beam.current_predictions.data.tolist()
+            lastest_score = beam.current_scores.view(-1).data.tolist()
+            select_indices = beam.current_origin
+
+            #print(lastest_action)
+            #for act in lastest_action:
+            #    if act < len(itos):
+            #        print(itos[act], end=" ")
+            #    else:
+            #        print("copy", end=" ")
+            #print()
+            #print(lastest_score)
+            #print(select_indices)
+            states.update_beam(lastest_action, select_indices.data.tolist(), lastest_score)
+
             any_beam_is_finished = beam.is_finished.any()
             if any_beam_is_finished:
+                #print("any_beam_is_finished")
                 beam.update_finished()
                 if beam.done:
                     break
 
             select_indices = beam.current_origin
-            lastest_action = beam.current_predictions
-            lastest_score = beam.current_scores.view(-1)
-
-            #print(select_indices)
-            #print(lastest_action)
-            #print([itos[act] for act in lastest_action])
-            #print(lastest_score)
-            states.update(select_indices, lastest_action, lastest_score)
 
             if any_beam_is_finished:
                 # Reorder states.
+
+                states.index_select(select_indices)
                 if isinstance(memory_bank, tuple):
                     memory_bank = tuple(x.index_select(1, select_indices)
                                         for x in memory_bank)

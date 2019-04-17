@@ -133,7 +133,7 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
 
     # Build encoder.
 
-    encoder = build_encoder(model_opt, src_emb[i])
+    encoder = build_encoder(model_opt, src_emb)
     # Build decoder.
     # tgt_field = fields[0]["tgt"]
     tgt_emb = build_embeddings(model_opt, fields["tgt"], for_encoder=False)

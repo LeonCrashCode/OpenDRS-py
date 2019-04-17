@@ -113,7 +113,7 @@ class BeamSearch(DecodeStrategy):
         return self.select_indices
     @property
     def current_scores(self):
-        return self.topk_scores
+        return self.topk_scores.exp()
     
     @property
     def current_backptr(self):

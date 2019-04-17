@@ -101,6 +101,13 @@ class RandomSampling(DecodeStrategy):
         self.original_batch_idx = torch.arange(self.batch_size,
                                                dtype=torch.long, device=device)
 
+    @property
+    def current_predictions(self):
+        return self.alive_seq[:, -1]
+    @property
+    def current_selections(self):
+        return self.select_indices
+
     def advance(self, log_probs, attn):
         """Select next tokens randomly from the top k possible next tokens.
 

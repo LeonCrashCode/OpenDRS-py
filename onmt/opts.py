@@ -657,6 +657,10 @@ def translate_opts(parser):
     group.add('--gpu', '-gpu', type=int, default=-1,
               help="Device to run on")
 
+    group = parser.add_argument_group('Constraint')
+    group.add('--constraint', '-constraint', action="store_true",
+              help='ensure the outputs are well-form tree')
+
     # Options most relevant to speech.
     group = parser.add_argument_group('Speech')
     group.add('--sample_rate', '-sample_rate', type=int, default=16000,

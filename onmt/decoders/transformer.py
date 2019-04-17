@@ -65,7 +65,7 @@ class TransformerDecoderLayer(nn.Module):
                 dtype=torch.uint8)
             future_mask = future_mask.triu_(1).view(1, tgt_len, tgt_len)
             dec_mask = torch.gt(tgt_pad_mask + future_mask, 0)
-
+            
         input_norm = self.layer_norm_1(inputs)
 
         if isinstance(self.self_attn, MultiHeadedAttention):

@@ -9,7 +9,7 @@ class sequence_state(object):
 	def print(self):
 		print(self.stack)
 		print(self.var)
-		print(self.first)
+		#print(self.first)
 class BB_sequence_state(object):
 	def __init__(self, itos, stoi, mb_device, batch_size, beam_size, eos=3):
 		self.states = [sequence_state() for i in range(batch_size*beam_size)] # empty
@@ -101,12 +101,24 @@ class BB_sequence_state(object):
 					self.allow_close(mask)
 				else:
 					self.allow_anyv(mask, state.var)
+					self.allow_unk(mask)
+					self.allow_close(mask)
 					v = self.unmask
-
+		#print("expanded_mask", v)
 		expanded_mask = torch.full([1], v, dtype=torch.float, device=self.device)
 		return mask, expanded_mask
+	def index_select(self, select_indices):
+		states = []
+		for index in select_indices:
+			states.append(deepcopy(self.states[index]))
+		self.states = states
 
-	def update(self, selects, actions, scores):
+	def update(self, actions):
+		for i, act in enumerate(actions):
+			self.states[i] = self.update_one(self.states[i], act)
+
+	def update_beam(self, actions, selects, scores):
+		"""
 		selects = selects.data.tolist()
 		actions = actions.data.tolist()
 		scores = scores.exp().data.tolist()
@@ -114,12 +126,24 @@ class BB_sequence_state(object):
 
 		states = []
 		for i, j, k in zip(selects, actions, scores):
-			#print(i,j,k)
-			#self.states[i].print()
+			print(i,j,k)
+			self.states[i].print()
 			if k <= 0.0:
 				states.append(deepcopy(self.states[i]))
 			else:
 				states.append(self.update_one(self.states[i], j))
+		self.states = states
+		"""
+		assert len(actions) == len(selects)
+		if scores:
+			assert len(actions) == len(scores)
+		states = []
+		for i, (sel, act) in enumerate(zip(selects, actions)):
+			if scores and scores[i] <= 0:
+				states.append(deepcopy(self.states[i]))
+			else:
+				states.append(self.update_one(self.states[sel], act))
+			#self.states[i].print()
 		self.states = states
 
 	def update_one(self, state, act):
@@ -136,10 +160,10 @@ class BB_sequence_state(object):
 				stack.pop()
 				if len(stack) != 0:
 					stack[-1][1] += 1
-		elif self.itos[act][-1] == "(" :
+		elif act < len(self.itos) and self.itos[act][-1] == "(" :
 			stack.append([act, 0])
 		else:
-			if re.match("^[anvr]\.[0-9][0-9]$", self.itos[act]):
+			if act < len(self.itos) and re.match("^[anvr]\.[0-9][0-9]$", self.itos[act]):
 				stack[-1][1] = 1000
 			else:
 				stack[-1][1] += 1
@@ -164,6 +188,8 @@ class BB_sequence_state(object):
 				mask[act] = self.unmask
 	def allow_close(self, mask):
 		mask[self.stoi[")"]] = self.unmask
+	def allow_unk(self, mask):
+		mask[self.stoi["<unk>"]] = self.unmask
 	def allow_normal_cond(self, mask):
 		for act, act_name in enumerate(self.itos):
 			if act_name[-1] == "(" and act_name not in ["DRS(", "SDRS(", "OR(", "DIS(", "DUP(", "IMP(","NEC(", "POS(", "NOT("]:
