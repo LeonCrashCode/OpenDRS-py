@@ -10,6 +10,104 @@ class sequence_state(object):
 		print(self.stack)
 		print(self.var)
 		#print(self.first)
+
+class sequence_mask(object):
+	def __init__(self, itos, stoi, eos, device):
+
+		self.itos = itos
+
+		vs = list("XESTPKOB")
+		self.XESTPKOB_set = [ [] for i in range(8)] #X1, E1, O1 ...
+		for act, act_name in enumerate(itos):
+			for i, v in enumerate(vs):
+				if re.match("^"+v+"-?[0-9]+$", act_name):
+					self.XESTPKOB_set[i].append(act)
+
+		self.P_set = [] # P1(, ...
+		for act, act_name in enumerate(itos):
+			if re.match("^P[0-9]+\($", act_name):
+					self.P_set.append(act)
+
+		XESTPKOB_idx = [ -1 for i in range(8)] # X, E, S, T ....
+		for i, v in enumerate(vs):
+			XESTPKOB_idx[i] = stoi[v]
+
+		#the token ending with character "("
+		endBracket = []
+		for act, act_name in enumerate(self.itos):
+			if act_name[-1] == "(":
+				endBracket.append(act)
+
+		DRS_idx = stoi["DRS("] if "DRS(" in stoi else -1
+		SDRS_idx = stoi["SDRS("] if "SDRS(" in stoi else -1
+		close_idx = stoi[")"] if ")" in stoi else -1
+		unk_idx = stoi["<unk>"] if "<unk>" in stoi else -1
+
+		OR_idx = stoi["OR("] if "OR(" in stoi else -1
+		DIS_idx = stoi["DIS("] if "DIS(" in stoi else -1
+		DUP_idx = stoi["DUP("] if "DUP(" in stoi else -1
+		IMP_idx = stoi["IMP("] if "IMP(" in stoi else -1
+
+		NEC_idx = stoi["NEC("] if "NEC(" in stoi else -1
+		POS_idx = stoi["POS("] if "POS(" in stoi else -1
+		NOT_idx = stoi["NOT("] if "NOT(" in stoi else -1
+
+		self.allow_drs = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_drs, [DRS_idx], 1)
+
+		self.allow_sdrs = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_sdrs, [SDRS_idx], 1)
+
+		self.allow_end = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_end, [eos], 1)
+
+		self.allow_cond = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_cond, endBracket, 1)
+		self.set(self.allow_cond, [DRS_idx, SDRS_idx], 0)
+
+		self.allow_close = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_close, [close_idx], 1)
+
+		self.allow_unk = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_unk, [unk_idx], 1)
+
+		self.allow_normal_cond = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_normal_cond, endBracket, 1)
+		self.set(self.allow_normal_cond, [DRS_idx, SDRS_idx, OR_idx, DIS_idx, DUP_idx, IMP_idx, NEC_idx, POS_idx, NOT_idx], 0)
+
+		self.allow_ref0 = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_ref0, self.XESTPKOB_set[-1] + self.XESTPKOB_set[-2] + XESTPKOB_idx[-2:], 1)
+
+
+		self.allow_ref1 = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_ref1, XESTPKOB_idx[0:-3], 1)
+
+		self.allow_dv = torch.zeros(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_dv, self.XESTPKOB_set[-3], 1)
+
+		self.allow_anyv = torch.ones(len(self.itos), dtype=torch.uint8, device=device)
+		self.set(self.allow_anyv, range(4), 0)
+		self.set(self.allow_anyv, [close_idx] + endBracket + XESTPKOB_idx + self.XESTPKOB_set[-1] + self.XESTPKOB_set[-2], 0)
+
+	def set(self, tensor, indices, value):
+		for index in indices:
+			if index < 0:
+				continue
+			tensor[index] = value
+
+	def set_p_cond(self, mask, pmax):
+		mask = deepcopy(mask)
+		for p in self.P_set:
+			if int(self.itos[p][1:-1]) >= pmax:
+				mask[p] = 0
+		return mask
+	def set_xestpkob_var(self, mask, i, vmax):
+		mask = deepcopy(mask)
+		for v in self.XESTPKOB_set[i]:
+			if int(self.itos[v][1:]) >= vmax:
+				mask[v] = 0
+		return mask
+
 class BB_sequence_state(object):
 	def __init__(self, itos, stoi, mb_device, batch_size, beam_size, eos=3):
 		self.states = [sequence_state() for i in range(batch_size*beam_size)] # empty
@@ -18,9 +116,9 @@ class BB_sequence_state(object):
 		self.device = mb_device
 		self.batch_size = batch_size
 		self.beam_size = beam_size
-		self.unmask = 1
-		self.mask = 0
 		self.eos = eos
+
+		self.maskset = sequence_mask(itos, stoi, eos, mb_device)
 	def get_mask(self):
 		masks = []
 		expanded_masks = []
@@ -32,80 +130,81 @@ class BB_sequence_state(object):
 
 	def get_mask_one(self, state):
 		stack = state.stack
-		mask = torch.full([len(self.itos)], self.mask, dtype=torch.float, device=self.device)
-		v = self.mask
+		mask = None
+		expaned_v = 0
 		if len(stack) == 0: # empty
 			if state.first:
-				self.allow_drs(mask)
-				self.allow_sdrs(mask)
+				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
-				self.allow_end(mask)
+				mask = self.maskset.allow_end
 
 		elif stack[-1][0] == self.stoi["DRS("]: 
-			self.allow_cond(mask, state.var)
+			mask = self.maskset.allow_cond
+			mask = self.maskset.set_p_cond(mask, state.var["P"])
 			if stack[-1][1] > 0:
-				self.allow_close(mask)
+				mask |= self.maskset.allow_close
 
 		elif stack[-1][0] == self.stoi["SDRS("]:
 			if stack[-1][1] < 2:
-				self.allow_drs(mask)
-				self.allow_sdrs(mask)
+				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
-				if stack[-1][1] == 1000: # start predict discourse relations
-					self.allow_normal_cond(mask)
+				mask = self.maskset.allow_normal_cond
+				if stack[-1][1] >= 1000: # start predict discourse relations
+					pass
 				else:
-					self.allow_normal_cond(mask)
-					self.allow_drs(mask)
-					self.allow_sdrs(mask)
+					mask |= self.maskset.allow_drs
+					mask |= self.maskset.allow_sdrs
 
 		elif self.itos[stack[-1][0]] in ["OR(", "DIS(", "DUP(", "IMP("]:
 			if stack[-1][1] < 2:
-				self.allow_drs(mask)
-				self.allow_sdrs(mask)
+				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
-				self.allow_close(mask)
+				mask = self.maskset.allow_close
 
 		elif self.itos[stack[-1][0]]in ["NEC(", "POS(", "NOT("]:
 			if stack[-1][1] < 1:
-				self.allow_drs(mask)
-				self.allow_sdrs(mask)
+				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
-				self.allow_close(mask)
+				mask = self.maskset.allow_close
 
 		elif re.match("^P[0-9]+\($", self.itos[stack[-1][0]]):
 			if stack[-1][1] < 1:
-				self.allow_drs(mask)
-				self.allow_sdrs(mask)
+				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
-				self.allow_close(mask)
+				mask = self.maskset.allow_close
 
 		elif stack[-1][0] == self.stoi["Ref("]:
 			if stack[-1][1] == 0:
-				self.allow_ref0(mask, state.var)
+				mask = self.maskset.allow_ref0
+				mask = self.maskset.set_xestpkob_var(mask, -2, state.var["O"]) # O
 			elif stack[-1][1] == 1:
-				self.allow_ref1(mask)
+				mask = self.maskset.allow_ref1
 			else:
-				self.allow_close(mask)
+				mask = self.maskset.allow_close
 
 		#elif stack[-1][0] == self.stoi["Pred("]:
 		else:
 			if stack[-2][0] == self.stoi["SDRS("]:
 				if stack[-1][1] < 2:
-					self.allow_dv(mask, stack[-2][1])
+					mask = self.maskset.allow_dv
+					mask = self.maskset.set_xestpkob_var(mask, -3, stack[-2][1]) #K
 				else:
-					self.allow_close()
+					mask = self.maskset.allow_close
 			else:
 				if stack[-1][1] == 0:
-					self.allow_ref0(mask, state.var)
+					mask = self.maskset.allow_ref0
+					mask = self.maskset.set_xestpkob_var(mask, -2, state.var["O"]) # O
 				elif stack[-1][1] == 1000:
-					self.allow_close(mask)
+					mask = self.maskset.allow_close
 				else:
-					self.allow_anyv(mask, state.var)
-					self.allow_unk(mask)
-					self.allow_close(mask)
-					v = self.unmask
+					mask = self.maskset.allow_anyv
+					for i, v in enumerate(list("XESTP")):
+						mask = self.maskset.set_xestpkob_var(mask, i, state.var[v])
+					mask |= self.maskset.allow_unk
+					mask |= self.maskset.allow_close
+					expaned_v = 1
 		#print("expanded_mask", v)
-		expanded_mask = torch.full([1], v, dtype=torch.float, device=self.device)
+		expanded_mask = torch.full([1], expaned_v, dtype=torch.uint8, device=self.device)
 		return mask, expanded_mask
 	def index_select(self, select_indices):
 		states = []
@@ -173,7 +272,7 @@ class BB_sequence_state(object):
 				if act_name in list("XESTPO"):
 					nstate.var[act_name] += 1
 		return nstate
-
+	"""
 	def allow_drs(self, mask):
 		mask[self.stoi["DRS("]] = self.unmask
 	def allow_sdrs(self, mask):
@@ -226,7 +325,7 @@ class BB_sequence_state(object):
 					mask[act] = self.unmask
 				continue
 			mask[act] = self.unmask
-
+	"""
 
 
 

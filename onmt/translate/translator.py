@@ -181,7 +181,7 @@ class Translator(object):
                 "scores": [],
                 "log_probs": []}
         set_random_seed(seed, self._use_cuda)
-
+        self.constraint = constraint
     @classmethod
     def from_opt(
             cls,
@@ -212,6 +212,7 @@ class Translator(object):
 
         src_reader = inputters.str2reader[opt.data_type].from_opt(opt)
         tgt_reader = inputters.str2reader["text"].from_opt(opt)
+
         return cls(
             model,
             fields,
@@ -448,16 +449,18 @@ class Translator(object):
             self._exclusion_idxs, return_attention, self.max_length,
             sampling_temp, keep_topk, memory_lengths)
 
-        itos = self.fields["tgt"].base_field.vocab.itos
-        stoi = self.fields["tgt"].base_field.vocab.stoi
+        states = None
+        if self.constraint:
+            itos = self.fields["tgt"].base_field.vocab.itos
+            stoi = self.fields["tgt"].base_field.vocab.stoi
 
-        states = BB_sequence_state(
-            itos,
-            stoi,
-            mb_device,
-            batch_size,
-            1,
-            eos=self._tgt_eos_idx)
+            states = BB_sequence_state(
+                itos,
+                stoi,
+                mb_device,
+                batch_size,
+                1,
+                eos=self._tgt_eos_idx)
 
         for step in range(max_length):
             # Shape: (1, B, 1)
@@ -479,15 +482,16 @@ class Translator(object):
             random_sampler.advance(log_probs, attn)
 
             lastest_action = random_sampler.current_predictions.data.tolist()
-            #print(lastest_action.data.tolist())
-            #for act in lastest_action.data.tolist():
+            #print(lastest_action)
+            #for act in lastest_action:
             #    if act < len(itos):
             #        print(itos[act], end=" ")
             #    else:
             #        print("copy", end=" ")
             #print()
 
-            states.update(lastest_action)
+            if states is not None:
+                states.update(lastest_action)
 
             any_batch_is_finished = random_sampler.is_finished.any()
             if any_batch_is_finished:
@@ -497,8 +501,8 @@ class Translator(object):
 
             if any_batch_is_finished:
                 select_indices = random_sampler.select_indices
-
-                states.index_select(select_indices)
+                if states is not None:
+                    states.index_select(select_indices)
                 # Reorder states.
                 if isinstance(memory_bank, tuple):
                     memory_bank = tuple(x.index_select(1, select_indices)
@@ -602,7 +606,7 @@ class Translator(object):
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
             if constraint:
-                log_probs = log_probs.exp().mul(masks).log()
+                log_probs = log_probs.exp().masked_fill((masks+1)%2, 0).log()
 
         else:
             attn = dec_attn["copy"]
@@ -634,7 +638,7 @@ class Translator(object):
             if constraint:
                 expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
                 masks = torch.cat([masks, expand_masks], 1)
-                scores = scores.mul(masks)
+                scores = scores.masked_fill((masks+1)%2, 0)
             #print(scores)
             log_probs = scores.squeeze(0).log()
 
@@ -706,16 +710,19 @@ class Translator(object):
             exclusion_tokens=self._exclusion_idxs,
             memory_lengths=memory_lengths)
 
-        itos = self.fields["tgt"].base_field.vocab.itos
-        stoi = self.fields["tgt"].base_field.vocab.stoi
+        states = None
 
-        states = BB_sequence_state(
-            itos,
-            stoi,
-            mb_device,
-            batch_size,
-            beam_size,
-            eos=self._tgt_eos_idx)
+        if self.constraint:
+            itos = self.fields["tgt"].base_field.vocab.itos
+            stoi = self.fields["tgt"].base_field.vocab.stoi
+
+            states = BB_sequence_state(
+                itos,
+                stoi,
+                mb_device,
+                batch_size,
+                beam_size,
+                eos=self._tgt_eos_idx)
 
         for step in range(max_length):
             decoder_input = beam.current_predictions.view(1, -1, 1)
@@ -748,7 +755,8 @@ class Translator(object):
             #print()
             #print(lastest_score)
             #print(select_indices)
-            states.update_beam(lastest_action, select_indices.data.tolist(), lastest_score)
+            if states is not None:
+                states.update_beam(lastest_action, select_indices.data.tolist(), lastest_score)
 
             any_beam_is_finished = beam.is_finished.any()
             if any_beam_is_finished:
@@ -761,8 +769,8 @@ class Translator(object):
 
             if any_beam_is_finished:
                 # Reorder states.
-
-                states.index_select(select_indices)
+                if states is not None:
+                    states.index_select(select_indices)
                 if isinstance(memory_bank, tuple):
                     memory_bank = tuple(x.index_select(1, select_indices)
                                         for x in memory_bank)
