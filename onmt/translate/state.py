@@ -150,19 +150,25 @@ class BB_sequence_state(object):
 			else:
 				mask = self.maskset.allow_normal_cond
 				if stack[-1][1] >= 1000: # start predict discourse relations
-					pass
+					mask |= self.maskset.allow_close
 				else:
 					mask |= self.maskset.allow_drs
 					mask |= self.maskset.allow_sdrs
 
 		elif self.itos[stack[-1][0]] in ["OR(", "DIS(", "DUP(", "IMP("]:
-			if stack[-1][1] < 2:
+			if stack[-1][1] == 0:
+				mask = self.maskset.allow_ref0
+				mask = self.maskset.set_xestpkob_var(mask, -2, state.var["O"]) # O
+			elif stack[-1][1] < 3:
 				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
 				mask = self.maskset.allow_close
 
 		elif self.itos[stack[-1][0]]in ["NEC(", "POS(", "NOT("]:
-			if stack[-1][1] < 1:
+			if stack[-1][1] == 0:
+				mask = self.maskset.allow_ref0
+				mask = self.maskset.set_xestpkob_var(mask, -2, state.var["O"]) # O
+			elif stack[-1][1] < 2:
 				mask = self.maskset.allow_drs | self.maskset.allow_sdrs
 			else:
 				mask = self.maskset.allow_close
