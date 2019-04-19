@@ -550,6 +550,7 @@ class Translator(object):
 
         enc_states, memory_bank, src_lengths = self.model.encoder(
             src, src_lengths)
+
         if src_lengths is None:
             assert not isinstance(memory_bank, tuple), \
                 'Ensemble decoding only supported for text data'
@@ -615,7 +616,7 @@ class Translator(object):
             scores = self.model.generator(dec_out.view(-1, dec_out.size(2)),
                                           attn.view(-1, attn.size(2)),
                                           src_map)
-
+            #print(scores)
             #print(scores.size())
             #print(batch_offset)
             # here we have scores [tgt_lenxbatch, vocab] or [beamxbatch, vocab]
@@ -633,15 +634,11 @@ class Translator(object):
             ) # some copied words are the same, the scores of the same word should be sumed.
 
             scores = scores.view(decoder_in.size(0), -1, scores.size(-1))
-
-            #print(scores)
             if constraint:
                 expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
                 masks = torch.cat([masks, expand_masks], 1)
                 scores = scores.masked_fill((masks+1)%2, 0)
-            #print(scores)
             log_probs = scores.squeeze(0).log()
-
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
         return log_probs, attn
@@ -712,10 +709,11 @@ class Translator(object):
 
         states = None
 
+        #see = 23
+        see = 0
         if self.constraint:
             itos = self.fields["tgt"].base_field.vocab.itos
             stoi = self.fields["tgt"].base_field.vocab.stoi
-
             states = BB_sequence_state(
                 itos,
                 stoi,
@@ -726,9 +724,8 @@ class Translator(object):
 
         for step in range(max_length):
             decoder_input = beam.current_predictions.view(1, -1, 1)
-            #print("================= step", step)
-            #print(decoder_input.size())
-            
+            #print("================= step",step)
+            #print(decoder_input[0][see*10:(see+1)*10,0])
             log_probs, attn = self._decode_and_generate(
                 decoder_input,
                 states,
@@ -746,27 +743,47 @@ class Translator(object):
             lastest_score = beam.current_scores.view(-1).data.tolist()
             select_indices = beam.current_origin
 
+            #print(select_indices[see*10:see*10+10] % 10)
+            #print(beam.current_scores.view(-1)[see*10:see*10+10] % 10)
+            #print(lastest_action[see*10:(see+1)*10])
+            #print(lastest_score[see*10:(see+1)*10])
             #print(lastest_action)
-            #for act in lastest_action:
-            #    if act < len(itos):
-            #        print(itos[act], end=" ")
+            #print(lastest_score)
+            #for act in lastest_action[see*10:(see+1)*10]:
+            #    if act < len(self.fields["tgt"].base_field.vocab.itos):
+            #        print(act, self.fields["tgt"].base_field.vocab.itos[act], end=" | ")
+            #    else:
+            #        print(act, "copy", end=" | ")
+            #print()
+            #for act in lastest_action[::10]:
+            #    if act < len(self.fields["tgt"].base_field.vocab.itos):
+            #        print(self.fields["tgt"].base_field.vocab.itos[act], end=" ")
             #    else:
             #        print("copy", end=" ")
             #print()
             #print(lastest_score)
-            #print(select_indices)
             if states is not None:
                 states.update_beam(lastest_action, select_indices.data.tolist(), lastest_score)
-
+            #print(select_indices[see*10:see*10+10] % 10)
+            #for i in range(10):
+            #    states.states[see*10+i].print()
+            #print()
             any_beam_is_finished = beam.is_finished.any()
             if any_beam_is_finished:
-                #print("any_beam_is_finished")
-                beam.update_finished()
+            #    print("any_beam_is_finished")
+                finished_batch = beam.update_finished()
+                cnt = 0
+                for bidx in finished_batch:
+                    if bidx < see:
+                        cnt += 1
+                see -= cnt
+                #exit()
                 if beam.done:
                     break
 
             select_indices = beam.current_origin
-
+            #print("REDUCE",select_indices.size())
+            
             if any_beam_is_finished:
                 # Reorder states.
                 if states is not None:

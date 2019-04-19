@@ -101,7 +101,6 @@ class DecodeStrategy(object):
     def block_ngram_repeats(self, log_probs):
         cur_len = len(self)
         if self.block_ngram_repeat > 0 and cur_len > 1:
-            print("here")
             for path_idx in range(self.alive_seq.shape[0]):
                 # skip BOS
                 hyp = self.alive_seq[path_idx, 1:]

@@ -9,7 +9,7 @@ class sequence_state(object):
 	def print(self):
 		print(self.stack)
 		print(self.var)
-		#print(self.first)
+		print(self.first)
 
 class sequence_mask(object):
 	def __init__(self, itos, stoi, eos, device):
@@ -242,13 +242,12 @@ class BB_sequence_state(object):
 				states.append(self.update_one(self.states[i], j))
 		self.states = states
 		"""
-		assert len(actions) == len(selects)
-		if scores:
-			assert len(actions) == len(scores)
+		assert len(actions) == len(selects) == len(scores)
+
 		states = []
 		for i, (sel, act) in enumerate(zip(selects, actions)):
-			if scores and scores[i] <= 0:
-				states.append(deepcopy(self.states[i]))
+			if scores[i] <= 0:
+				states.append(deepcopy(self.states[sel]))
 			else:
 				states.append(self.update_one(self.states[sel], act))
 			#self.states[i].print()

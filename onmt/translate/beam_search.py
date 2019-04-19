@@ -126,9 +126,7 @@ class BeamSearch(DecodeStrategy):
 
         # using integer division to get an integer _B without casting
 
-        
         _B = log_probs.shape[0] // self.beam_size
-
         if self._stepwise_cov_pen and self._prev_penalty is not None:
             self.topk_log_probs += self._prev_penalty
             self.topk_log_probs -= self.global_scorer.cov_penalty(
@@ -138,10 +136,8 @@ class BeamSearch(DecodeStrategy):
         # force the output to be longer than self.min_length
         step = len(self)
         self.ensure_min_length(log_probs)
-
         # Multiply probs by the beam probability.
         log_probs += self.topk_log_probs.view(_B * self.beam_size, 1)
-
 
         self.block_ngram_repeats(log_probs)
 
@@ -152,12 +148,15 @@ class BeamSearch(DecodeStrategy):
 
         # Flatten probs into a list of possibilities.
         curr_scores = log_probs / length_penalty
+
         curr_scores = curr_scores.reshape(_B, self.beam_size * vocab_size)
 
-        
+        #print(curr_scores.size())
+        #print(curr_scores[-7][13])
+        #print(curr_scores[-7][59])
         torch.topk(curr_scores,  self.beam_size, dim=-1,
                    out=(self.topk_scores, self.topk_ids))
-
+        
         # Recover log probs.
         # Length penalty is just a scalar. It doesn't matter if it's applied
         # before or after the topk.
@@ -166,6 +165,8 @@ class BeamSearch(DecodeStrategy):
         # Resolve beam origin and map to batch index flat representation.
         #print(self.topk_ids,vocab_size)
         torch.div(self.topk_ids, vocab_size, out=self._batch_index)
+        #print(self.topk_log_probs)
+        #print(self._batch_index)
         #print(self._batch_index)
         #print(self._beam_offset[:_B])
         self._batch_index += self._beam_offset[:_B].unsqueeze(1)
@@ -216,20 +217,26 @@ class BeamSearch(DecodeStrategy):
         # Penalize beams that finished.
         _B_old = self.topk_log_probs.shape[0]
         step = self.alive_seq.shape[-1]  # 1 greater than the step in advance
-        self.topk_log_probs.masked_fill_(self.is_finished, -1e10)
+        #self.topk_log_probs.masked_fill_(self.is_finished, -1e10) 
+        self.topk_log_probs = self.topk_log_probs.exp().masked_fill_(self.is_finished, 0).log()
+        #print(self.is_finished)
         # on real data (newstest2017) with the pretrained transformer,
         # it's faster to not move this back to the original device
         self.is_finished = self.is_finished.to('cpu')
+        #print(self.top_beam_finished)
         self.top_beam_finished |= self.is_finished[:, 0].eq(1)
+        #print(self.alive_seq.shape)
         predictions = self.alive_seq.view(_B_old, self.beam_size, step)
         attention = (
             self.alive_attn.view(
                 step - 1, _B_old, self.beam_size, self.alive_attn.size(-1))
             if self.alive_attn is not None else None)
         non_finished_batch = []
+        finished_batch = []
         for i in range(self.is_finished.size(0)):
             b = self._batch_offset[i]
             finished_hyp = self.is_finished[i].nonzero().view(-1)
+            #print(finished_hyp)
             # Store finished hypotheses for this batch.
             for j in finished_hyp:
                 if self.ratio > 0:
@@ -249,7 +256,7 @@ class BeamSearch(DecodeStrategy):
                                <= self.best_scores[b]) or \
                     self.is_finished[i].all()
             else:
-                finish_flag = self.top_beam_finished[i] != 0
+                finish_flag = self.top_beam_finished[i] != 0 
             if finish_flag and len(self.hypotheses[b]) >= self.n_best:
                 best_hyp = sorted(
                     self.hypotheses[b], key=lambda x: x[0], reverse=True)
@@ -260,14 +267,16 @@ class BeamSearch(DecodeStrategy):
                     self.predictions[b].append(pred)
                     self.attention[b].append(
                         attn if attn is not None else [])
+
+                #print("BATCH FINISHED **********************")
+                finished_batch.append(i)
             else:
                 non_finished_batch.append(i)
         non_finished = torch.tensor(non_finished_batch)
         # If all sentences are translated, no need to go further.
         if len(non_finished) == 0:
             self.done = True
-            return
-
+            return finished_batch
         _B_new = non_finished.shape[0]
         # Remove finished batches for the next step.
         self.top_beam_finished = self.top_beam_finished.index_select(
@@ -294,3 +303,4 @@ class BeamSearch(DecodeStrategy):
                 if self._stepwise_cov_pen:
                     self._prev_penalty = self._prev_penalty.index_select(
                         0, non_finished)
+        return finished_batch
