@@ -13,12 +13,11 @@ from onmt.encoders import str2enc
 
 from onmt.decoders import str2dec
 
-from onmt.modules import Embeddings, CopyGenerator
+from onmt.modules import Embeddings, CopyGenerator, ElmoEmbeddings
 from onmt.modules.util_class import Cast
 from onmt.utils.misc import use_gpu
 from onmt.utils.logging import logger
 from onmt.utils.parse import ArgumentParser
-
 
 def build_embeddings(opt, text_field, for_encoder=True):
     """
@@ -38,20 +37,36 @@ def build_embeddings(opt, text_field, for_encoder=True):
     fix_word_vecs = opt.fix_word_vecs_enc if for_encoder \
         else opt.fix_word_vecs_dec
 
-    emb = Embeddings(
-        word_vec_size=emb_dim,
-        position_encoding=opt.position_encoding,
-        feat_merge=opt.feat_merge,
-        feat_vec_exponent=opt.feat_vec_exponent,
-        feat_vec_size=opt.feat_vec_size,
-        dropout=opt.dropout,
-        word_padding_idx=word_padding_idx,
-        feat_padding_idx=feat_pad_indices,
-        word_vocab_size=num_word_embeddings,
-        feat_vocab_sizes=num_feat_embeddings,
-        sparse=opt.optim == "sparseadam",
-        fix_word_vecs=fix_word_vecs
-    )
+    if opt.elmo_path != "" and for_encoder:
+        itos = None
+        for _, f in text_field:
+            itos = f.vocab.itos
+            break
+        emb = ElmoEmbeddings(
+            itos=itos,
+            word_vec_size=emb_dim,
+            word_padding_idx=word_padding_idx,
+            position_encoding=opt.position_encoding,
+            dropout=opt.dropout,
+            fix_word_vecs=True,
+            elmo_path=opt.elmo_path
+            )
+    else:
+        emb = Embeddings(
+            word_vec_size=emb_dim,
+            position_encoding=opt.position_encoding,
+            feat_merge=opt.feat_merge,
+            feat_vec_exponent=opt.feat_vec_exponent,
+            feat_vec_size=opt.feat_vec_size,
+            dropout=opt.dropout,
+            word_padding_idx=word_padding_idx,
+            feat_padding_idx=feat_pad_indices,
+            word_vocab_size=num_word_embeddings,
+            feat_vocab_sizes=num_feat_embeddings,
+            sparse=opt.optim == "sparseadam",
+            fix_word_vecs=fix_word_vecs
+        )
+
     return emb
 
 
@@ -208,7 +223,7 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
                 if p.dim() > 1:
                     xavier_uniform_(p)
 
-        if hasattr(model.encoder, 'embeddings'):
+        if hasattr(model.encoder, 'embeddings') and model_opt.elmo_path == "":
                 model.encoder.embeddings.load_pretrained_vectors(
                     model_opt.pre_word_vecs_enc)
         if hasattr(model.decoder, 'embeddings'):

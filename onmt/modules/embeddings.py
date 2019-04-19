@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from onmt.modules.util_class import Elementwise
 
-
+from allennlp.modules.elmo import Elmo, batch_to_ids
 class PositionalEncoding(nn.Module):
     """Sinusoidal positional encoding for non-recurrent neural networks.
 
@@ -105,7 +105,8 @@ class Embeddings(nn.Module):
                  feat_vocab_sizes=[],
                  dropout=0,
                  sparse=False,
-                 fix_word_vecs=False):
+                 fix_word_vecs=False
+                 ):
         self._validate_args(feat_merge, feat_vocab_sizes, feat_vec_exponent,
                             feat_vec_size, feat_padding_idx)
 
@@ -245,3 +246,81 @@ class Embeddings(nn.Module):
             source = self.make_embedding(source)
 
         return source
+
+class ElmoEmbeddings(nn.Module):
+    
+
+    def __init__(self,
+                itos,
+                word_vec_size,
+                word_padding_idx,
+                position_encoding=False,
+                dropout=0,
+                sparse=False,
+                fix_word_vecs=True,
+                elmo_path=""):
+
+        super(ElmoEmbeddings, self).__init__()
+        
+        self.itos = itos
+        self.word_padding_idx = word_padding_idx
+
+        # The sequence of operations that converts the input sequence
+        # into a sequence of embeddings. At minimum this consists of
+        # looking up the embeddings for each word and feature in the
+        # input. Model parameters may require the sequence to contain
+        # additional operations as well.
+
+        self.emb_luts = Elmo(
+                elmo_path+"_options.json",
+                elmo_path+"_weights.hdf5",
+                1, requires_grad=False, dropout=0)
+
+        self.position_encoding = position_encoding
+
+        if self.position_encoding:
+            self.pe = PositionalEncoding(dropout, word_vec_size)
+
+        #if fix_word_vecs:
+        #    self.word_lut.weight.requires_grad = False
+
+
+
+    def load_pretrained_vectors(self, emb_file):
+        """Load in pretrained embeddings.
+
+        Args:
+          emb_file (str) : path to torch serialized embeddings
+        """
+
+        pass
+
+    def forward(self, source, step=None):
+        """Computes the embeddings for words and features.
+
+        Args:
+            source (LongTensor): index tensor ``(len, batch, nfeat)``
+
+        Returns:
+            FloatTensor: Word embeddings ``(len, batch, embedding_size)``
+        """
+        sentences = []
+        source = source.squeeze(2).transpose(0,1).data.tolist()
+
+        for i in range(len(source)):
+            sentences.append([])
+            for j in range(len(source[0])):
+                if source[i][j] == self.word_padding_idx:
+                    break
+                sentences[-1].append(self.itos[source[i][j]])
+        #print(sentences)
+        character_ids = batch_to_ids(sentences)
+        #print(character_ids)
+        embeddings = self.emb_luts(character_ids)
+
+        source = embeddings["elmo_representations"][0].transpose(0,1)
+
+        source = self.pe(source)
+
+        return source
+

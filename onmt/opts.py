@@ -29,7 +29,8 @@ def model_opts(parser):
               help='Word embedding size for tgt.')
     group.add('--word_vec_size', '-word_vec_size', type=int, default=-1,
               help='Word embedding size for src and tgt.')
-
+    group.add('--elmo_path', '-elmo_path', default="",
+              help="create elmo index from the Elmo")
     group.add('--share_decoder_embeddings', '-share_decoder_embeddings',
               action='store_true',
               help="Use a shared weight matrix for the input and "

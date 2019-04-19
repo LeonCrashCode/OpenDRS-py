@@ -8,7 +8,7 @@ from onmt.encoders.encoder import EncoderBase
 from onmt.modules import MultiHeadedAttention
 from onmt.modules.position_ffn import PositionwiseFeedForward
 
-
+from allennlp.modules.elmo import Elmo
 class TransformerEncoderLayer(nn.Module):
     """
     A single layer of the transformer encoder.
@@ -45,6 +45,7 @@ class TransformerEncoderLayer(nn.Module):
             * outputs ``(batch_size, src_len, model_dim)``
         """
         input_norm = self.layer_norm(inputs)
+
         context, _ = self.self_attn(input_norm, input_norm, input_norm,
                                     mask=mask, type="self")
         out = self.dropout(context) + inputs
@@ -110,6 +111,8 @@ class TransformerEncoder(EncoderBase):
         """See :func:`EncoderBase.forward()`"""
         self._check_args(src, lengths)
 
+        if isinstance(self.embeddings, tuple):
+            self.embeddings, fields = self.embeddings
         emb = self.embeddings(src)
 
         out = emb.transpose(0, 1).contiguous()
@@ -117,6 +120,7 @@ class TransformerEncoder(EncoderBase):
         w_batch, w_len = words.size()
         padding_idx = self.embeddings.word_padding_idx
         mask = words.data.eq(padding_idx).unsqueeze(1)  # [B, 1, T]
+
         # Run the forward pass of every layer of the tranformer.
         for layer in self.transformer:
             out = layer(out, mask)

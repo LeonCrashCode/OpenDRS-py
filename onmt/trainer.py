@@ -307,7 +307,6 @@ class Trainer(object):
                 report_stats.n_src_words += src_lengths.sum().item()
 
             tgt_outer = batch.tgt
-
             bptt = False
             for j in range(0, target_size-1, trunc_size):
                 # 1. Create truncated target.
