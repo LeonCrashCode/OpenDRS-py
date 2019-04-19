@@ -538,7 +538,7 @@ class Translator(object):
     def _decode_and_generate(
             self,
             decoder_in,
-            states,
+            #states,
             memory_bank,
             batch,
             src_vocabs,
@@ -547,7 +547,7 @@ class Translator(object):
             step=None,
             batch_offset=None):
 
-        masks, expand_masks = states.get_mask()
+        #masks, expand_masks = states.get_mask()
 
         if self.copy_attn:
             # Turn any copied words into UNKs.
@@ -571,7 +571,7 @@ class Translator(object):
             log_probs = self.model.generator[self.generator_id](dec_out.squeeze(0))
             # returns [(batch_size x beam_size) , vocab ] when 1 step
             # or [ tgt_len, batch_size, vocab ] when full sentence
-            log_probs = log_probs.exp().mul(masks).log()
+            #log_probs = log_probs.exp().mul(masks).log()
 
         else:
             attn = dec_attn["copy"]
@@ -598,10 +598,10 @@ class Translator(object):
             ) # some copied words are the same, the scores of the same word should be sumed.
 
             scores = scores.view(decoder_in.size(0), -1, scores.size(-1))
-            expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
+            #expand_masks = expand_masks.expand(expand_masks.size(0), scores.size(2) - masks.size(1))
 
-            masks = torch.cat([masks, expand_masks], 1)
-            scores = scores.mul(masks)
+            #masks = torch.cat([masks, expand_masks], 1)
+            #scores = scores.mul(masks)
 
             log_probs = scores.squeeze(0).log()
 
@@ -673,23 +673,23 @@ class Translator(object):
             exclusion_tokens=self._exclusion_idxs,
             memory_lengths=memory_lengths)
 
-        itos = self.fields[self.generator_id]["tgt"].base_field.vocab.itos
-        stoi = self.fields[self.generator_id]["tgt"].base_field.vocab.stoi
+        #itos = self.fields[self.generator_id]["tgt"].base_field.vocab.itos
+        #stoi = self.fields[self.generator_id]["tgt"].base_field.vocab.stoi
 
-        states = BB_sequence_state(
-            itos,
-            stoi,
-            mb_device,
-            batch_size,
-            beam_size,
-            eos=self._tgt_eos_idx)
+        #states = BB_sequence_state(
+        #    itos,
+        #    stoi,
+        #    mb_device,
+        #    batch_size,
+        #    beam_size,
+        #    eos=self._tgt_eos_idx)
 
         for step in range(max_length):
             decoder_input = beam.current_predictions.view(1, -1, 1)
             #print(decoder_input)
             log_probs, attn = self._decode_and_generate(
                 decoder_input,
-                states,
+                #states,
                 memory_bank,
                 batch,
                 src_vocabs,
@@ -713,7 +713,7 @@ class Translator(object):
             #print(lastest_action)
             #print([itos[act] for act in lastest_action])
             #print(lastest_score)
-            states.update(select_indices, lastest_action, lastest_score)
+            #states.update(select_indices, lastest_action, lastest_score)
 
             if any_beam_is_finished:
                 # Reorder states.
