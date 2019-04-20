@@ -140,7 +140,9 @@ class TransformerDecoder(DecoderBase):
         # just reuses the context attention.
         self._copy = copy_attn
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
-
+        if self.embeddings.word_vec_size != d_model:
+            self.linear = nn.Linear(self.embeddings.word_vec_size, d_model)
+        self.d_model = d_model
     @classmethod
     def from_opt(cls, opt, embeddings):
         """Alternate constructor."""
@@ -189,7 +191,8 @@ class TransformerDecoder(DecoderBase):
 
         emb = self.embeddings(tgt, step=step)
         assert emb.dim() == 3  # len x batch x embedding_dim
-
+        if emb.size(2) != self.d_model:
+            emb = self.linear(emb)
         output = emb.transpose(0, 1).contiguous()
         src_memory_bank = memory_bank.transpose(0, 1).contiguous()
 
