@@ -94,7 +94,9 @@ class TransformerEncoder(EncoderBase):
                 max_relative_positions=max_relative_positions)
              for i in range(num_layers)])
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
-
+        if self.embeddings.word_vec_size != d_model:
+            self.linear = nn.Linear(self.embeddings.word_vec_size, d_model)
+        self.d_model = d_model
     @classmethod
     def from_opt(cls, opt, embeddings):
         """Alternate constructor."""
@@ -114,7 +116,8 @@ class TransformerEncoder(EncoderBase):
         if isinstance(self.embeddings, tuple):
             self.embeddings, fields = self.embeddings
         emb = self.embeddings(src)
-
+        if emb.size(2) != self.d_model:
+            emb = self.linear(emb)
         out = emb.transpose(0, 1).contiguous()
         words = src[:, :, 0].transpose(0, 1)
         w_batch, w_len = words.size()

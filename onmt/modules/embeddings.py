@@ -264,7 +264,7 @@ class ElmoEmbeddings(nn.Module):
         
         self.itos = itos
         self.word_padding_idx = word_padding_idx
-
+        self.word_vec_size = word_vec_size
         # The sequence of operations that converts the input sequence
         # into a sequence of embeddings. At minimum this consists of
         # looking up the embeddings for each word and feature in the
