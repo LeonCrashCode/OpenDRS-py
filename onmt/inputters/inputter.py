@@ -311,7 +311,6 @@ def _build_fv_from_multifield(multifield, counters, build_fv_args,
 def build_vocab(train_dataset_files, fields, data_type, share_vocab,
                 src_vocab_path, src_vocab_size, src_words_min_frequency,
                 tgt_vocab_path, tgt_vocab_size, tgt_words_min_frequency,
-                elmo_options, elmo_weights,
                 vocab_size_multiple=1):
     """Build the fields for all data sides.
 
