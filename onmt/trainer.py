@@ -286,11 +286,11 @@ class Trainer(object):
         else:
             # Set model back to training mode.
             valid_model.train()
-            if hasattr(model.encoder, 'embeddings'):
-                if isinstance(model.encoder.embeddings, onmt.modules.ElmoEmbeddings):
-                    model.encoder.embeddings.eval()
-                elif isinstance(model.encoder.embeddings, onmt.modules.BertEmbeddings):
-                    model.encoder.embeddings.eval()
+            if hasattr(valid_model.encoder, 'embeddings'):
+                if isinstance(valid_model.encoder.embeddings, onmt.modules.ElmoEmbeddings):
+                    valid_model.encoder.embeddings.eval()
+                elif isinstance(valid_model.encoder.embeddings, onmt.modules.BertEmbeddings):
+                    valid_model.encoder.embeddings.eval()
 
         return stats
 
