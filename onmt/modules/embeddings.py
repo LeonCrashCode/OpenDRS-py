@@ -304,7 +304,7 @@ class ElmoEmbeddings(nn.Module):
             FloatTensor: Word embeddings ``(len, batch, embedding_size)``
         """
         sentences = []
-        #device = source.get_device()
+        device = source.get_device()
         source = source.squeeze(2).transpose(0,1).data.tolist()
 
         for i in range(len(source)):
@@ -314,7 +314,7 @@ class ElmoEmbeddings(nn.Module):
                     break
                 sentences[-1].append(self.itos[source[i][j]])
         #print(sentences)
-        character_ids = batch_to_ids(sentences)#.to(device)
+        character_ids = batch_to_ids(sentences).to(device)
         #print(character_ids)
         embeddings = self.emb_luts(character_ids)
 
