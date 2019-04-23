@@ -31,6 +31,10 @@ def model_opts(parser):
               help='Word embedding size for src and tgt.')
     group.add('--elmo_path', '-elmo_path', default="",
               help="create elmo index from the Elmo")
+    group.add('--bert_type', '-bert_type', default="",
+              help="create bert embeddings")
+    group.add('--bert_cache_path', '-bert_cache_path', default="",
+              help="temporally store the bert model")
     group.add('--share_decoder_embeddings', '-share_decoder_embeddings',
               action='store_true',
               help="Use a shared weight matrix for the input and "
@@ -220,7 +224,7 @@ def preprocess_opts(parser):
     # Dictionary options, for text corpus
 
     group = parser.add_argument_group('Vocab')
-    group.add('--src_vocab', '-src_vocab', default="",
+    group.add('--src_vocab', '-src_vocab', default=[], nargs="*", required=True,
               help="Path to an existing source vocabulary. Format: "
                    "one word per line.")
     group.add('--tgt_vocab', '-tgt_vocab', default="",

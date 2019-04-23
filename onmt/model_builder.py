@@ -13,7 +13,7 @@ from onmt.encoders import str2enc
 
 from onmt.decoders import str2dec
 
-from onmt.modules import Embeddings, CopyGenerator, ElmoEmbeddings
+from onmt.modules import Embeddings, CopyGenerator, ElmoEmbeddings, BertEmbeddings
 from onmt.modules.util_class import Cast
 from onmt.utils.misc import use_gpu
 from onmt.utils.logging import logger
@@ -50,6 +50,21 @@ def build_embeddings(opt, text_field, for_encoder=True):
             dropout=opt.dropout,
             fix_word_vecs=True,
             elmo_path=opt.elmo_path
+            )
+    elif opt.bert_type != "" and for_encoder:
+        itos = None
+        for _, f in text_field:
+            itos = f.vocab.itos
+            break
+        emb = BertEmbeddings(
+            itos=itos,
+            word_vec_size=emb_dim,
+            word_padding_idx=word_padding_idx,
+            position_encoding=opt.position_encoding,
+            dropout=opt.dropout,
+            fix_word_vecs=True,
+            bert_type=opt.bert_type,
+            bert_cache_path=opt.bert_cache_path
             )
     else:
         emb = Embeddings(
@@ -223,10 +238,12 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
                 if p.dim() > 1:
                     xavier_uniform_(p)
         if hasattr(model.encoder, 'embeddings'):
-            if model_opt.elmo_path == "":
+            if model_opt.elmo_path == "" and model_opt.bert_type == "":
                 model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_enc)
-            else:
-                model.encoder.embeddings.load_elmo_vectors()
+            elif model_opt.elmo_path != "":
+                model.encoder.embeddings.load_pretrained_vectors()
+            elif model_opt.bert_type != "":
+                model.encoder.embeddings.load_pretrained_vectors()
         if hasattr(model.decoder, 'embeddings'):
                 model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
 

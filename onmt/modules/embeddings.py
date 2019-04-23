@@ -4,10 +4,12 @@ import warnings
 
 import torch
 import torch.nn as nn
+from torch.nn import ParameterList, Parameter
 
 from onmt.modules.util_class import Elementwise
 
 from allennlp.modules.elmo import Elmo, batch_to_ids
+from pytorch_pretrained_bert import BertTokenizer, BertModel
 class PositionalEncoding(nn.Module):
     """Sinusoidal positional encoding for non-recurrent neural networks.
 
@@ -283,7 +285,7 @@ class ElmoEmbeddings(nn.Module):
 
 
 
-    def load_elmo_vectors(self):
+    def load_pretrained_vectors(self):
         """Load in pretrained embeddings.
 
         Args:
@@ -304,7 +306,8 @@ class ElmoEmbeddings(nn.Module):
             FloatTensor: Word embeddings ``(len, batch, embedding_size)``
         """
         sentences = []
-        device = source.get_device()
+        if torch.cuda.is_available():
+            device = source.get_device()
         source = source.squeeze(2).transpose(0,1).data.tolist()
 
         for i in range(len(source)):
@@ -314,7 +317,11 @@ class ElmoEmbeddings(nn.Module):
                     break
                 sentences[-1].append(self.itos[source[i][j]])
         #print(sentences)
-        character_ids = batch_to_ids(sentences).to(device)
+
+        character_ids = batch_to_ids(sentences)
+
+        if torch.cuda.is_available():
+            character_ids = character_ids.to(device)
         #print(character_ids)
         embeddings = self.emb_luts(character_ids)
 
@@ -326,4 +333,126 @@ class ElmoEmbeddings(nn.Module):
         source = self.pe(source)
 
         return source
+
+
+class BertEmbeddings(nn.Module):
+    
+
+    def __init__(self,
+                itos,
+                word_vec_size,
+                word_padding_idx,
+                position_encoding=False,
+                dropout=0,
+                sparse=False,
+                fix_word_vecs=True,
+                bert_type="",
+                bert_cache_path=""):
+
+        super(BertEmbeddings, self).__init__()
+        
+        self.itos = itos
+        self.word_padding_idx = word_padding_idx
+        self.word_vec_size = word_vec_size
+        # The sequence of operations that converts the input sequence
+        # into a sequence of embeddings. At minimum this consists of
+        # looking up the embeddings for each word and feature in the
+        # input. Model parameters may require the sequence to contain
+        # additional operations as well.
+
+        self.bert_type = bert_type
+        self.bert_cache_path = bert_cache_path
+
+        self.tokenizer = None
+        self.emb_luts = None
+
+        self.position_encoding = position_encoding
+        if self.position_encoding:
+            self.pe = PositionalEncoding(dropout, word_vec_size)
+
+        self.scalar_parameters = ParameterList(
+                [Parameter(torch.FloatTensor([0.0]),
+                           requires_grad=True) for i in range(12)])
+        self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
+        #if fix_word_vecs:
+        #    self.word_lut.weight.requires_grad = False
+
+
+
+    def load_pretrained_vectors(self):
+        """Load in pretrained embeddings.
+
+        Args:
+          emb_file (str) : path to torch serialized embeddings
+        """
+        print(self.bert_type, self.bert_cache_path)
+        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type)
+        self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
+        self.emb_luts.eval()
+
+    def forward(self, source, step=None):
+        """Computes the embeddings for words and features.
+
+        Args:
+            source (LongTensor): index tensor ``(len, batch, nfeat)``
+
+        Returns:
+            FloatTensor: Word embeddings ``(len, batch, embedding_size)``
+        """
+        sentences = []
+        masks = []
+        max_length = source.size(0)
+
+        if torch.cuda.is_available():
+            device = source.get_device()
+        source = source.squeeze(2).transpose(0,1).data.tolist()
+
+        
+        for i in range(len(source)):
+            sentences.append([])
+            masks.append([])
+            for j in range(len(source[0])):
+                if source[i][j] == self.word_padding_idx:
+                    break
+                else:
+                    masks[-1].append(1)
+                    if self.itos[source[i][j]] == "<unk>":
+                        sentences[-1].append("[UNK]")
+                    else:
+                        sentences[-1].append(self.itos[source[i][j]])
+        
+        for i in range(len(sentences)):
+            j = len(sentences[i])
+            while j < max_length:
+                sentences[i].append("[PAD]")
+                masks[i].append(0)
+                j += 1
+        #print(sentences)
+        indexed_tokens = [self.tokenizer.convert_tokens_to_ids(item) for item in sentences]
+        
+        indexed_tokens = torch.tensor(indexed_tokens)
+        masks = torch.tensor(masks)
+        if torch.cuda.is_available():
+            indexed_tokens = indexed_tokens.to(device)
+
+        with torch.no_grad():
+            encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks)
+
+
+        normed_weights = torch.nn.functional.softmax(torch.cat([parameter for parameter
+                                                                in self.scalar_parameters]), dim=0)
+        normed_weights = torch.split(normed_weights, split_size_or_sections=1)
+
+        pieces = []
+        for weight, encoded_layer in zip(normed_weights, encoded_layers):
+            pieces.append(weight * encoded_layer)
+  
+        source = self.gamma * sum(pieces)
+
+        source = source.transpose(0,1)
+
+        source = self.pe(source)
+
+        return source
+        
 

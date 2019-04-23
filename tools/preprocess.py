@@ -68,7 +68,6 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, opt,
             sort_key=inputters.str2sortkey[opt.data_type],
             filter_pred=filter_pred
         )
-
         #data_path = "{:s}.{:s}.{:d}.pt".format(opt.save_data, corpus_type, i)
         data_path = "{:s}.{:s}.{:d}.pt".format(opt.save_data, corpus_type, index)
         dataset_paths.append(data_path)
@@ -90,7 +89,7 @@ def build_save_vocab(train_dataset, fields, opt, index):
     src_vocab = None
     if len(opt.src_vocab) > 0:
         src_vocab = opt.src_vocab[index]
-
+        
     fields = inputters.build_vocab(
         train_dataset, fields, opt.data_type, opt.share_vocab,
             src_vocab, opt.src_vocab_size, opt.src_words_min_frequency,
