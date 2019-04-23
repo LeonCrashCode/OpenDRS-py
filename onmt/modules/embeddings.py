@@ -271,10 +271,8 @@ class ElmoEmbeddings(nn.Module):
         # input. Model parameters may require the sequence to contain
         # additional operations as well.
 
-        self.emb_luts = Elmo(
-                elmo_path+"_options.json",
-                elmo_path+"_weights.hdf5",
-                1, requires_grad=False, dropout=0)
+        self.elmo_path = elmo_path
+        self.emb_luts = None
 
         self.position_encoding = position_encoding
         if self.position_encoding:
@@ -285,14 +283,16 @@ class ElmoEmbeddings(nn.Module):
 
 
 
-    def load_pretrained_vectors(self, emb_file):
+    def load_elmo_vectors(self):
         """Load in pretrained embeddings.
 
         Args:
           emb_file (str) : path to torch serialized embeddings
         """
-
-        pass
+        self.emb_luts = Elmo(
+                self.elmo_path+"_options.json",
+                self.elmo_path+"_weights.hdf5",
+                1, requires_grad=False, dropout=0)
 
     def forward(self, source, step=None):
         """Computes the embeddings for words and features.
@@ -304,7 +304,7 @@ class ElmoEmbeddings(nn.Module):
             FloatTensor: Word embeddings ``(len, batch, embedding_size)``
         """
         sentences = []
-        device = source.get_device()
+        #device = source.get_device()
         source = source.squeeze(2).transpose(0,1).data.tolist()
 
         for i in range(len(source)):
@@ -314,12 +314,15 @@ class ElmoEmbeddings(nn.Module):
                     break
                 sentences[-1].append(self.itos[source[i][j]])
         #print(sentences)
-        character_ids = batch_to_ids(sentences).to(device)
+        character_ids = batch_to_ids(sentences)#.to(device)
         #print(character_ids)
         embeddings = self.emb_luts(character_ids)
 
-        source = embeddings["elmo_representations"][0].transpose(0,1)
+        source = embeddings["elmo_representations"][0]
+        #print(source[0])
+        source = source.transpose(0,1)
 
+        #exit()
         source = self.pe(source)
 
         return source
