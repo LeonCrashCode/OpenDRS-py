@@ -434,7 +434,7 @@ class BertEmbeddings(nn.Module):
         masks = torch.tensor(masks)
         if torch.cuda.is_available():
             indexed_tokens = indexed_tokens.to(device)
-
+            masks = masks.to(device)
         with torch.no_grad():
             encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks)
 
