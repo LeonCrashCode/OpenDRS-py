@@ -437,9 +437,6 @@ class BertEmbeddings(nn.Module):
         with torch.no_grad():
             encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks)
 
-        for i in range(len(encoded_layers)):
-            encoded_layers[i].requires_grad = False
-
         normed_weights = torch.nn.functional.softmax(torch.cat([parameter for parameter
                                                                 in self.scalar_parameters]), dim=0)
         normed_weights = torch.split(normed_weights, split_size_or_sections=1)
