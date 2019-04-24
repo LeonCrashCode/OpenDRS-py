@@ -385,8 +385,7 @@ class BertEmbeddings(nn.Module):
         Args:
           emb_file (str) : path to torch serialized embeddings
         """
-        print(self.bert_type, self.bert_cache_path)
-        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type)
+        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
         self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
         self.emb_luts.eval()
 
