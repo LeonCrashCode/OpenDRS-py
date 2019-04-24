@@ -218,6 +218,10 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
                        r'\1.layer_norm\2.weight', s)
             return s
 
+        if hasattr(model.encoder, 'embeddings'):
+            if model_opt.elmo_path != "" or model_opt.bert_type != "":
+                model.encoder.embeddings.load_pretrained_vectors()
+
         checkpoint['model'] = {fix_key(k): v
                                for k, v in checkpoint['model'].items()}
         # end of patch for backward compatibility
@@ -240,9 +244,7 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
         if hasattr(model.encoder, 'embeddings'):
             if model_opt.elmo_path == "" and model_opt.bert_type == "":
                 model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_enc)
-            elif model_opt.elmo_path != "":
-                model.encoder.embeddings.load_pretrained_vectors()
-            elif model_opt.bert_type != "":
+            else:
                 model.encoder.embeddings.load_pretrained_vectors()
         if hasattr(model.decoder, 'embeddings'):
                 model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
