@@ -361,7 +361,7 @@ def train_opts(parser):
               help="Optimization resetter when train_from.")
 
     # Pretrained word vectors
-    group.add('--pre_word_vecs_enc', '-pre_word_vecs_enc', nargs='*', type=str, default=[],
+    group.add('--pre_word_vecs_enc', '-pre_word_vecs_enc',
               help="If a valid path is specified, then this will load "
                    "pretrained word embeddings on the encoder side. "
                    "See README for specific formatting instructions.")
