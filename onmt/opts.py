@@ -194,13 +194,13 @@ def preprocess_opts(parser):
               help="Type of the source input. "
                    "Options are [text|img|audio].")
 
-    group.add('--train_src', '-train_src', default=[], nargs='*', required=True,
+    group.add('--train_src', '-train_src', required=True,
               help="Path to the training source data")
-    group.add('--train_tgt', '-train_tgt', default=[], nargs='*', required=True,
+    group.add('--train_tgt', '-train_tgt', required=True,
               help="Path to the training target data")
-    group.add('--valid_src', '-valid_src', default=[], nargs='*',
+    group.add('--valid_src', '-valid_src',
               help="Path to the validation source data")
-    group.add('--valid_tgt', '-valid_tgt', default=[], nargs='*',
+    group.add('--valid_tgt', '-valid_tgt',
               help="Path to the validation target data")
 
     group.add('--src_dir', '-src_dir', default="",
@@ -224,7 +224,7 @@ def preprocess_opts(parser):
     # Dictionary options, for text corpus
 
     group = parser.add_argument_group('Vocab')
-    group.add('--src_vocab', '-src_vocab', default=[], nargs="*", required=True,
+    group.add('--src_vocab', '-src_vocab', default="",
               help="Path to an existing source vocabulary. Format: "
                    "one word per line.")
     group.add('--tgt_vocab', '-tgt_vocab', default="",
