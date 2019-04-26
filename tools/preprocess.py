@@ -28,20 +28,15 @@ def check_existing_pt_files(opt):
             sys.exit(1)
 
 
-def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, opt,
-                        index,
-                        train_src,
-                        train_tgt,
-                        valid_src,
-                        valid_tgt):
+def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, opt):
     assert corpus_type in ['train', 'valid']
 
     if corpus_type == 'train':
-        src = train_src
-        tgt = train_tgt
+        src = opt.train_src
+        tgt = opt.train_tgt
     else:
-        src = valid_src
-        tgt = valid_tgt
+        src = opt.valid_src
+        tgt = opt.valid_tgt
 
     logger.info("Reading source and target files: %s %s." % (src, tgt))
 
@@ -56,7 +51,6 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, opt,
     else:
         filter_pred = None
     for i, (src_shard, tgt_shard) in enumerate(shard_pairs):
-        assert i == 0, "only allow shard size is 1"
         assert len(src_shard) == len(tgt_shard)
         logger.info("Building shard %d." % i)
         dataset = inputters.Dataset(
@@ -68,8 +62,8 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, opt,
             sort_key=inputters.str2sortkey[opt.data_type],
             filter_pred=filter_pred
         )
-        #data_path = "{:s}.{:s}.{:d}.pt".format(opt.save_data, corpus_type, i)
-        data_path = "{:s}.{:s}.{:d}.pt".format(opt.save_data, corpus_type, index)
+
+        data_path = "{:s}.{:s}.{:d}.pt".format(opt.save_data, corpus_type, i)
         dataset_paths.append(data_path)
 
         logger.info(" * saving %sth %s data shard to %s."
@@ -85,29 +79,25 @@ def build_save_dataset(corpus_type, fields, src_reader, tgt_reader, opt,
     return dataset_paths
 
 
-def build_save_vocab(train_dataset, fields, opt, index):
-    src_vocab = None
-    if len(opt.src_vocab) > 0:
-        src_vocab = opt.src_vocab[index]
-        
+def build_save_vocab(train_dataset, fields, opt):
     fields = inputters.build_vocab(
         train_dataset, fields, opt.data_type, opt.share_vocab,
-            src_vocab, opt.src_vocab_size, opt.src_words_min_frequency,
+        opt.src_vocab, opt.src_vocab_size, opt.src_words_min_frequency,
         opt.tgt_vocab, opt.tgt_vocab_size, opt.tgt_words_min_frequency,
         vocab_size_multiple=opt.vocab_size_multiple
     )
 
-    vocab_path = opt.save_data + "."+str(index)+'.vocab.pt'
+    vocab_path = opt.save_data + '.vocab.pt'
     torch.save(fields, vocab_path)
 
 
-def count_features(paths):
+def count_features(path):
     """
     path: location of a corpus file with whitespace-delimited tokens and
                     ￨-delimited features within the token
     returns: the number of features in the dataset
     """
-    with codecs.open(paths[0], "r", "utf-8") as f:
+    with codecs.open(path, "r", "utf-8") as f:
         first_tok = f.readline().split(None, 1)[0]
         return len(first_tok.split(u"￨")) - 1
 
@@ -120,41 +110,34 @@ def main(opt):
     init_logger(opt.log_file)
     logger.info("Extracting features...")
 
-    src_nfeats = count_features(opt.train_src) if opt.data_type == 'text' else 0
+    src_nfeats = count_features(opt.train_src) if opt.data_type == 'text' \
+        else 0
     tgt_nfeats = count_features(opt.train_tgt)  # tgt always text so far
-
     logger.info(" * number of source features: %d." % src_nfeats)
     logger.info(" * number of target features: %d." % tgt_nfeats)
 
-    if len(opt.src_vocab) > 0:
-        assert len(opt.src_vocab) == len(opt.train_src), "you should provide src vocab for each dataset if you want to use your own vocab"
-    for i, (train_src, train_tgt) in enumerate(zip(opt.train_src, opt.train_tgt)):
-        valid_src = opt.valid_src[i]
-        valid_tgt = opt.valid_tgt[i]
-        logger.info("Working on %d dataset..." % i)
-        logger.info("Building `Fields` object...")
-        fields = inputters.get_fields(
-            opt.data_type,
-            src_nfeats,
-            tgt_nfeats,
-            dynamic_dict=opt.dynamic_dict,
-            src_truncate=opt.src_seq_length_trunc,
-            tgt_truncate=opt.tgt_seq_length_trunc)
+    logger.info("Building `Fields` object...")
+    fields = inputters.get_fields(
+        opt.data_type,
+        src_nfeats,
+        tgt_nfeats,
+        dynamic_dict=opt.dynamic_dict,
+        src_truncate=opt.src_seq_length_trunc,
+        tgt_truncate=opt.tgt_seq_length_trunc)
 
-        src_reader = inputters.str2reader[opt.data_type].from_opt(opt)
-        tgt_reader = inputters.str2reader["text"].from_opt(opt)
+    src_reader = inputters.str2reader[opt.data_type].from_opt(opt)
+    tgt_reader = inputters.str2reader["text"].from_opt(opt)
 
-        logger.info("Building & saving training data...")
-        train_dataset_files = build_save_dataset('train', fields, src_reader, tgt_reader, opt,
-                                     i, train_src, train_tgt, valid_src, valid_tgt)
+    logger.info("Building & saving training data...")
+    train_dataset_files = build_save_dataset(
+        'train', fields, src_reader, tgt_reader, opt)
 
-        if opt.valid_src and opt.valid_tgt:
-            logger.info("Building & saving validation data...")
-            build_save_dataset('valid', fields, src_reader, tgt_reader, opt,
-                i, train_src, train_tgt, valid_src, valid_tgt)
+    if opt.valid_src and opt.valid_tgt:
+        logger.info("Building & saving validation data...")
+        build_save_dataset('valid', fields, src_reader, tgt_reader, opt)
 
-        logger.info("Building & saving vocabulary...")
-        build_save_vocab(train_dataset_files, fields, opt, i)
+    logger.info("Building & saving vocabulary...")
+    build_save_vocab(train_dataset_files, fields, opt)
 
 
 def _get_parser():
