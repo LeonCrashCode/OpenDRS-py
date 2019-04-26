@@ -4,3 +4,6 @@ torch>=1.0
 git+https://github.com/pytorch/text.git@master#wheel=torchtext
 future
 configargparse
+jsonnet==0.10.0
+allennlp
+pytorch-pretrained-bert
