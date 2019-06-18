@@ -429,7 +429,6 @@ class BertEmbeddings(nn.Module):
                 sentences[i].append("[PAD]")
                 masks[i].append(0)
                 j += 1
-        #print(sentences)
         indexed_tokens = [self.tokenizer.convert_tokens_to_ids(item) for item in sentences]
         
         indexed_tokens = torch.tensor(indexed_tokens)
@@ -437,8 +436,7 @@ class BertEmbeddings(nn.Module):
         if torch.cuda.is_available():
             indexed_tokens = indexed_tokens.to(device)
             masks = masks.to(device)
-        with torch.no_grad():
-            encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks, output_all_encoded_layers=False)
+        encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks, output_all_encoded_layers=False)
 
         #normed_weights = torch.nn.functional.softmax(torch.cat([parameter for parameter
         #                                                        in self.scalar_parameters]), dim=0)
