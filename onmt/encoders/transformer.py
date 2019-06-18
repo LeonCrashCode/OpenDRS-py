@@ -9,6 +9,9 @@ from onmt.modules import MultiHeadedAttention
 from onmt.modules.position_ffn import PositionwiseFeedForward
 
 from allennlp.modules.elmo import Elmo
+
+from onmt.modules.embeddings import ElmoEmbeddings
+from onmt.modules.embeddings import BertEmbeddings
 class TransformerEncoderLayer(nn.Module):
     """
     A single layer of the transformer encoder.
@@ -88,12 +91,16 @@ class TransformerEncoder(EncoderBase):
         super(TransformerEncoder, self).__init__()
 
         self.embeddings = embeddings
-        self.transformer = nn.ModuleList(
-            [TransformerEncoderLayer(
-                d_model, heads, d_ff, dropout,
-                max_relative_positions=max_relative_positions)
-             for i in range(num_layers)])
-        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+        if isinstance(self.embeddings, ElmoEmbeddings) or isinstance(self.embeddings, BertEmbeddings):
+            pass
+        else:
+            self.transformer = nn.ModuleList(
+                [TransformerEncoderLayer(
+                    d_model, heads, d_ff, dropout,
+                    max_relative_positions=max_relative_positions)
+                for i in range(num_layers)])
+            self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+            
         if self.embeddings.word_vec_size != d_model:
             self.linear = nn.Linear(self.embeddings.word_vec_size, d_model)
         self.d_model = d_model
@@ -113,20 +120,24 @@ class TransformerEncoder(EncoderBase):
         """See :func:`EncoderBase.forward()`"""
         self._check_args(src, lengths)
 
-        if isinstance(self.embeddings, tuple):
-            self.embeddings, fields = self.embeddings
+        
         emb = self.embeddings(src)
         if emb.size(2) != self.d_model:
             emb = self.linear(emb)
+
         out = emb.transpose(0, 1).contiguous()
         words = src[:, :, 0].transpose(0, 1)
         w_batch, w_len = words.size()
         padding_idx = self.embeddings.word_padding_idx
         mask = words.data.eq(padding_idx).unsqueeze(1)  # [B, 1, T]
 
-        # Run the forward pass of every layer of the tranformer.
-        for layer in self.transformer:
-            out = layer(out, mask)
-        out = self.layer_norm(out)
+
+        if isinstance(self.embeddings, ElmoEmbeddings) or isinstance(self.embeddings, BertEmbeddings):
+            pass
+        else:
+            # Run the forward pass of every layer of the tranformer.
+            for layer in self.transformer:
+                out = layer(out, mask)
+            out = self.layer_norm(out)
 
         return emb, out.transpose(0, 1).contiguous(), lengths

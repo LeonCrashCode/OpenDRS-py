@@ -27,6 +27,8 @@ def model_opts(parser):
     group.add('--tgt_word_vec_size', '-tgt_word_vec_size',
               type=int, default=500,
               help='Word embedding size for tgt.')
+    group.add('--embedding_type', '-embedding_type', default='glove',
+              choices=['glove', 'elmo', 'bert'])
     group.add('--word_vec_size', '-word_vec_size', type=int, default=-1,
               help='Word embedding size for src and tgt.')
     group.add('--elmo_path', '-elmo_path', default="",

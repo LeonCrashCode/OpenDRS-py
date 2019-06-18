@@ -266,7 +266,7 @@ class ElmoEmbeddings(nn.Module):
         
         self.itos = itos
         self.word_padding_idx = word_padding_idx
-        self.word_vec_size = word_vec_size
+        self.word_vec_size = 1024
         # The sequence of operations that converts the input sequence
         # into a sequence of embeddings. At minimum this consists of
         # looking up the embeddings for each word and feature in the
@@ -276,14 +276,17 @@ class ElmoEmbeddings(nn.Module):
         self.elmo_path = elmo_path
         self.emb_luts = None
 
-        self.position_encoding = position_encoding
-        if self.position_encoding:
-            self.pe = PositionalEncoding(dropout, word_vec_size)
+        #self.position_encoding = position_encoding
+        #if self.position_encoding:
+        #    self.pe = PositionalEncoding(dropout, word_vec_size)
 
         #if fix_word_vecs:
         #    self.word_lut.weight.requires_grad = False
 
-
+        self.emb_luts = Elmo(
+                self.elmo_path+"_options.json",
+                self.elmo_path+"_weights.hdf5",
+                1, requires_grad=False, dropout=0)
 
     def load_pretrained_vectors(self):
         """Load in pretrained embeddings.
@@ -291,10 +294,8 @@ class ElmoEmbeddings(nn.Module):
         Args:
           emb_file (str) : path to torch serialized embeddings
         """
-        self.emb_luts = Elmo(
-                self.elmo_path+"_options.json",
-                self.elmo_path+"_weights.hdf5",
-                1, requires_grad=False, dropout=0)
+        
+        pass
 
     def forward(self, source, step=None):
         """Computes the embeddings for words and features.
@@ -326,11 +327,14 @@ class ElmoEmbeddings(nn.Module):
         embeddings = self.emb_luts(character_ids)
 
         source = embeddings["elmo_representations"][0]
+        #print(source.size())
+        #print(source)
+        #exit()
         #print(source[0])
         source = source.transpose(0,1)
 
         #exit()
-        source = self.pe(source)
+        #source = self.pe(source)
 
         return source
 
@@ -353,7 +357,7 @@ class BertEmbeddings(nn.Module):
         
         self.itos = itos
         self.word_padding_idx = word_padding_idx
-        self.word_vec_size = word_vec_size
+        self.word_vec_size = 768
         # The sequence of operations that converts the input sequence
         # into a sequence of embeddings. At minimum this consists of
         # looking up the embeddings for each word and feature in the
@@ -366,9 +370,9 @@ class BertEmbeddings(nn.Module):
         self.tokenizer = None
         self.emb_luts = None
 
-        self.position_encoding = position_encoding
-        if self.position_encoding:
-            self.pe = PositionalEncoding(dropout, word_vec_size)
+        #self.position_encoding = position_encoding
+        #if self.position_encoding:
+        #    self.pe = PositionalEncoding(dropout, word_vec_size)
 
         self.scalar_parameters = ParameterList(
                 [Parameter(torch.FloatTensor([0.0]),
@@ -376,7 +380,8 @@ class BertEmbeddings(nn.Module):
         self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
         #if fix_word_vecs:
         #    self.word_lut.weight.requires_grad = False
-
+        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
+        self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
 
 
     def load_pretrained_vectors(self):
@@ -385,9 +390,7 @@ class BertEmbeddings(nn.Module):
         Args:
           emb_file (str) : path to torch serialized embeddings
         """
-        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
-        self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
-        self.emb_luts.eval()
+        
 
     def forward(self, source, step=None):
         """Computes the embeddings for words and features.
@@ -444,12 +447,14 @@ class BertEmbeddings(nn.Module):
         pieces = []
         for weight, encoded_layer in zip(normed_weights, encoded_layers):
             pieces.append(weight * encoded_layer)
-  
+        
         source = self.gamma * sum(pieces)
 
         source = source.transpose(0,1)
 
-        source = self.pe(source)
+        #print(source.size())
+        #print(source)
+        #source = self.pe(source)
 
         return source
         

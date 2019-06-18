@@ -37,11 +37,8 @@ def build_embeddings(opt, text_field, for_encoder=True):
     fix_word_vecs = opt.fix_word_vecs_enc if for_encoder \
         else opt.fix_word_vecs_dec
 
-    if opt.elmo_path != "" and for_encoder:
-        itos = None
-        for _, f in text_field:
-            itos = f.vocab.itos
-            break
+    if opt.embedding_type == "elmo" and for_encoder:
+        itos = text_field[0][1].vocab.itos
         emb = ElmoEmbeddings(
             itos=itos,
             word_vec_size=emb_dim,
@@ -51,11 +48,8 @@ def build_embeddings(opt, text_field, for_encoder=True):
             fix_word_vecs=True,
             elmo_path=opt.elmo_path
             )
-    elif opt.bert_type != "" and for_encoder:
-        itos = None
-        for _, f in text_field:
-            itos = f.vocab.itos
-            break
+    elif opt.embedding_type == "bert" and for_encoder:
+        itos = text_field[0][1].vocab.itos
         emb = BertEmbeddings(
             itos=itos,
             word_vec_size=emb_dim,
@@ -218,9 +212,9 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
                        r'\1.layer_norm\2.weight', s)
             return s
 
-        if hasattr(model.encoder, 'embeddings'):
-            if model_opt.elmo_path != "" or model_opt.bert_type != "":
-                model.encoder.embeddings.load_pretrained_vectors()
+        #if hasattr(model.encoder, 'embeddings'):
+        #    if model_opt.elmo_path != "" or model_opt.bert_type != "":
+        #        model.encoder.embeddings.load_pretrained_vectors()
 
         checkpoint['model'] = {fix_key(k): v
                                for k, v in checkpoint['model'].items()}
@@ -242,13 +236,10 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
             for p in generator.parameters():
                 if p.dim() > 1:
                     xavier_uniform_(p)
-        if hasattr(model.encoder, 'embeddings'):
-            if model_opt.elmo_path == "" and model_opt.bert_type == "":
-                model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_enc)
-            else:
-                model.encoder.embeddings.load_pretrained_vectors()
-        if hasattr(model.decoder, 'embeddings'):
-                model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
+        if hasattr(model.encoder, 'embeddings') and isinstance(model.encoder.embeddings, Embeddings):
+            model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
+        if hasattr(model.decoder, 'embeddings') and isinstance(model.encoder.embeddings, Embeddings):
+            model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
 
     model.generator = generator
     model.to(device)
