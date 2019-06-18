@@ -374,10 +374,10 @@ class BertEmbeddings(nn.Module):
         #if self.position_encoding:
         #    self.pe = PositionalEncoding(dropout, word_vec_size)
 
-        self.scalar_parameters = ParameterList(
-                [Parameter(torch.FloatTensor([0.0]),
-                           requires_grad=True) for i in range(12)])
-        self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
+        #self.scalar_parameters = ParameterList(
+        #        [Parameter(torch.FloatTensor([0.0]),
+        #                   requires_grad=True) for i in range(12)])
+        #self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
         #if fix_word_vecs:
         #    self.word_lut.weight.requires_grad = False
         self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path, do_lower_case=False)
@@ -438,18 +438,18 @@ class BertEmbeddings(nn.Module):
             indexed_tokens = indexed_tokens.to(device)
             masks = masks.to(device)
         with torch.no_grad():
-            encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks)
+            encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks, output_all_encoded_layers=False)
 
-        normed_weights = torch.nn.functional.softmax(torch.cat([parameter for parameter
-                                                                in self.scalar_parameters]), dim=0)
-        normed_weights = torch.split(normed_weights, split_size_or_sections=1)
+        #normed_weights = torch.nn.functional.softmax(torch.cat([parameter for parameter
+        #                                                        in self.scalar_parameters]), dim=0)
+        #normed_weights = torch.split(normed_weights, split_size_or_sections=1)
 
-        pieces = []
-        for weight, encoded_layer in zip(normed_weights, encoded_layers):
-            pieces.append(weight * encoded_layer)
+        #pieces = []
+        #for weight, encoded_layer in zip(normed_weights, encoded_layers):
+        #    pieces.append(weight * encoded_layer)
         
-        source = self.gamma * sum(pieces)
-
+        #source = self.gamma * sum(pieces)
+        source = encoded_layers
         source = source.transpose(0,1)
 
         #print(source.size())
