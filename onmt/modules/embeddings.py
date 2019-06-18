@@ -380,7 +380,7 @@ class BertEmbeddings(nn.Module):
         self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
         #if fix_word_vecs:
         #    self.word_lut.weight.requires_grad = False
-        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
+        self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path, do_lower_case=False)
         self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
 
 
