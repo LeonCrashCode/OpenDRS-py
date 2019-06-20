@@ -236,9 +236,9 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
             for p in generator.parameters():
                 if p.dim() > 1:
                     xavier_uniform_(p)
-        if hasattr(model.encoder, 'embeddings') and isinstance(model.encoder.embeddings, Embeddings):
+        if hasattr(model.encoder, 'embeddings'):
             model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
-        if hasattr(model.decoder, 'embeddings') and isinstance(model.encoder.embeddings, Embeddings):
+        if hasattr(model.decoder, 'embeddings'):
             model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
 
     model.generator = generator

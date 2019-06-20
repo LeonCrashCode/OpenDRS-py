@@ -283,18 +283,18 @@ class ElmoEmbeddings(nn.Module):
         #if fix_word_vecs:
         #    self.word_lut.weight.requires_grad = False
 
-        self.emb_luts = Elmo(
-                self.elmo_path+"_options.json",
-                self.elmo_path+"_weights.hdf5",
-                1, requires_grad=False, dropout=0)
+        
 
-    def load_pretrained_vectors(self):
+    def load_pretrained_vectors(self, emb_file=None):
         """Load in pretrained embeddings.
 
         Args:
           emb_file (str) : path to torch serialized embeddings
         """
-        
+        self.emb_luts = Elmo(
+                self.elmo_path+"_options.json",
+                self.elmo_path+"_weights.hdf5",
+                1, requires_grad=False, dropout=0)
         pass
 
     def forward(self, source, step=None):
@@ -381,16 +381,17 @@ class BertEmbeddings(nn.Module):
         #if fix_word_vecs:
         #    self.word_lut.weight.requires_grad = False
         self.tokenizer = BertTokenizer.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path, do_lower_case=False)
-        self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
+        
 
 
-    def load_pretrained_vectors(self):
+    def load_pretrained_vectors(self, emb_file=None):
         """Load in pretrained embeddings.
-
+        
         Args:
           emb_file (str) : path to torch serialized embeddings
         """
         
+        self.emb_luts = BertModel.from_pretrained(self.bert_type, cache_dir=self.bert_cache_path)
 
     def forward(self, source, step=None):
         """Computes the embeddings for words and features.

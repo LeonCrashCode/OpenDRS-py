@@ -100,7 +100,7 @@ class TransformerEncoder(EncoderBase):
                     max_relative_positions=max_relative_positions)
                 for i in range(num_layers)])
             self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
-            
+
         if self.embeddings.word_vec_size != d_model:
             self.linear = nn.Linear(self.embeddings.word_vec_size, d_model)
         self.d_model = d_model
@@ -130,7 +130,6 @@ class TransformerEncoder(EncoderBase):
         w_batch, w_len = words.size()
         padding_idx = self.embeddings.word_padding_idx
         mask = words.data.eq(padding_idx).unsqueeze(1)  # [B, 1, T]
-
 
         if isinstance(self.embeddings, ElmoEmbeddings) or isinstance(self.embeddings, BertEmbeddings):
             pass
