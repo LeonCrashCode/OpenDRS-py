@@ -437,7 +437,7 @@ class BertEmbeddings(nn.Module):
         if torch.cuda.is_available():
             indexed_tokens = indexed_tokens.to(device)
             masks = masks.to(device)
-        encoded_layers, _ = self.emb_luts(indexed_tokens, attention_mask=masks, output_all_encoded_layers=False)
+        encoded_layers = self.emb_luts(indexed_tokens, attention_mask=masks)
 
         #normed_weights = torch.nn.functional.softmax(torch.cat([parameter for parameter
         #                                                        in self.scalar_parameters]), dim=0)
@@ -448,7 +448,7 @@ class BertEmbeddings(nn.Module):
         #    pieces.append(weight * encoded_layer)
         
         #source = self.gamma * sum(pieces)
-        source = encoded_layers
+        source = encoded_layers[0]
         source = source.transpose(0,1)
 
         #print(source.size())

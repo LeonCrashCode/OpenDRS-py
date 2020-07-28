@@ -36,7 +36,6 @@ def build_embeddings(opt, text_field, for_encoder=True):
 
     fix_word_vecs = opt.fix_word_vecs_enc if for_encoder \
         else opt.fix_word_vecs_dec
-
     if opt.embedding_type == "elmo" and for_encoder:
         itos = text_field[0][1].vocab.itos
         emb = ElmoEmbeddings(
@@ -236,7 +235,7 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
             for p in generator.parameters():
                 if p.dim() > 1:
                     xavier_uniform_(p)
-	if hasattr(model.encoder, 'embeddings'):
+        if hasattr(model.encoder, 'embeddings'):
             if model_opt.elmo_path == "" and model_opt.bert_type == "":
                 model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_enc)
             else:
