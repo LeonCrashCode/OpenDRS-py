@@ -236,11 +236,13 @@ def build_base_model(model_opt, fields, gpu, checkpoint=None, gpu_id=None):
             for p in generator.parameters():
                 if p.dim() > 1:
                     xavier_uniform_(p)
-        if hasattr(model.encoder, 'embeddings'):
-            model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
+	if hasattr(model.encoder, 'embeddings'):
+            if model_opt.elmo_path == "" and model_opt.bert_type == "":
+                model.encoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_enc)
+            else:
+                model.encoder.embeddings.load_pretrained_vectors()
         if hasattr(model.decoder, 'embeddings'):
-            model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
-
+                model.decoder.embeddings.load_pretrained_vectors(model_opt.pre_word_vecs_dec)
     model.generator = generator
     model.to(device)
     if model_opt.model_dtype == 'fp16':
