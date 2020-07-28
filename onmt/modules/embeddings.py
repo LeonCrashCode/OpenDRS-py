@@ -9,7 +9,7 @@ from torch.nn import ParameterList, Parameter
 from onmt.modules.util_class import Elementwise
 
 from allennlp.modules.elmo import Elmo, batch_to_ids
-from pytorch_pretrained_bert import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertModel
 class PositionalEncoding(nn.Module):
     """Sinusoidal positional encoding for non-recurrent neural networks.
 
